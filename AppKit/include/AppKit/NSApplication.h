@@ -25,7 +25,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 #import <Foundation/NSNotification.h>
 #import <Foundation/NSRunLoop.h>
 
-@class NSWindow, NSImage, NSMenu, NSPasteboard, NSDisplay, NSDockTile;
+@class NSWindow, NSImage, NSMenu, NSPasteboard, NSDisplay, NSDockTile,
+        NSAppearance;
 
 APPKIT_EXPORT const NSRunLoopMode NSModalPanelRunLoopMode;
 APPKIT_EXPORT const NSRunLoopMode NSEventTrackingRunLoopMode;
@@ -145,6 +146,8 @@ typedef NS_OPTIONS(NSUInteger, NSApplicationPresentationOptions) {
 @property(strong) NSMenu *helpMenu;
 @property(readonly) NSApplicationPresentationOptions currentSystemPresentationOptions;
 @property NSApplicationPresentationOptions presentationOptions;
+@property(strong) NSAppearance *appearance;
+@property(readonly, strong) NSAppearance *effectiveAppearance;
 
 + (NSApplication *) sharedApplication;
 

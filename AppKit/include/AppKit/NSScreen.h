@@ -24,6 +24,8 @@ extern NSNotificationName const NSScreenColorSpaceDidChangeNotification;
 
 typedef NSString *NSDeviceDescriptionKey;
 
+@class NSColorSpace;
+
 @interface NSScreen : NSObject {
     NSWindowDepth _depth;
     NSRect _frame;
@@ -46,6 +48,26 @@ typedef NSString *NSDeviceDescriptionKey;
 - (NSRect) visibleFrame;
 
 - (CGFloat) userSpaceScaleFactor;
+
+- (CGFloat) backingScaleFactor;
+
+- (CGFloat) maximumExtendedDynamicRangeColorComponentValue;
+
+- (CGFloat) maximumPotentialExtendedDynamicRangeColorComponentValue;
+
+- (CGFloat) maximumReferenceExtendedDynamicRangeColorComponentValue;
+
+- (NSColorSpace *) colorSpace;
+
+- (NSString *) localizedName;
+
+- (NSInteger) maximumFramesPerSecond;
+
+- (NSTimeInterval) minimumRefreshInterval;
+
+- (NSTimeInterval) maximumRefreshInterval;
+
+- (NSTimeInterval) displayUpdateGranularity;
 
 @end
 

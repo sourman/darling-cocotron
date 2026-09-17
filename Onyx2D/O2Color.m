@@ -143,6 +143,8 @@ O2ColorRef O2ColorCreateCopy(O2ColorRef self) {
 }
 
 O2ColorRef O2ColorCreateCopyWithAlpha(O2ColorRef self, O2Float alpha) {
+    if (self == NULL)
+        return NULL;
     size_t i;
     O2Float components[self->_numberOfComponents];
 
@@ -164,26 +166,38 @@ void O2ColorRelease(O2ColorRef self) {
 }
 
 O2ColorSpaceRef O2ColorGetColorSpace(O2ColorRef self) {
-    return self->_colorSpace;
+    return self ? self->_colorSpace : NULL;
 }
 
 size_t O2ColorGetNumberOfComponents(O2ColorRef self) {
-    return self->_numberOfComponents;
+    return self ? self->_numberOfComponents : 4;
 }
 
 const O2Float *O2ColorGetComponents(O2ColorRef self) {
-    return self->_components;
+    /* Apple CGColorGetComponents(NULL) does not crash. Callers (Chrome
+       NativeWidget / CALayer.backgroundColor) still index the pointer, so
+       return a static clear RGBA rather than NULL. */
+    __attribute__((used)) static const char o2color_null_getters_v1[] =
+            "o2color_null_getters_v1";
+    static const O2Float kNullComponents[5] = {0, 0, 0, 0, 0};
+    (void) o2color_null_getters_v1;
+    return self ? self->_components : kNullComponents;
 }
 
 O2Float O2ColorGetAlpha(O2ColorRef self) {
+    if (self == NULL || self->_components == NULL ||
+        self->_numberOfComponents == 0)
+        return 0;
     return self->_components[self->_numberOfComponents - 1];
 }
 
 O2PatternRef O2ColorGetPattern(O2ColorRef self) {
-    return self->_pattern;
+    return self ? self->_pattern : NULL;
 }
 
 BOOL O2ColorEqualToColor(O2ColorRef self, O2ColorRef other) {
+    if (self == NULL || other == NULL)
+        return self == other;
     if (![self->_colorSpace isEqualToColorSpace: other->_colorSpace])
         return NO;
 

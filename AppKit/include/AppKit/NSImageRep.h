@@ -17,10 +17,11 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 
+#import <AppKit/NSGraphics.h>
 #import <Foundation/NSGeometry.h>
 #import <Foundation/NSObject.h>
 
-@class NSArray, NSData, NSPasteboard, NSURL;
+@class NSArray, NSData, NSDictionary, NSPasteboard, NSURL, NSColorSpace;
 
 @interface NSImageRep : NSObject <NSCopying> {
     NSSize _size;
@@ -64,6 +65,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 - (BOOL) isOpaque;
 - (BOOL) hasAlpha;
 - (NSString *) colorSpaceName;
+- (NSColorSpace *) colorSpace;
 - (NSInteger) bitsPerSample;
 
 - (void) setSize: (NSSize) value;
@@ -77,5 +79,19 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 - (BOOL) draw;
 - (BOOL) drawAtPoint: (NSPoint) point;
 - (BOOL) drawInRect: (NSRect) rect;
+- (BOOL) drawInRect: (NSRect) dstRect
+           fromRect: (NSRect) srcRect
+          operation: (NSCompositingOperation) op
+           fraction: (CGFloat) fraction;
+- (BOOL) drawInRect: (NSRect) dstRect
+           fromRect: (NSRect) srcRect
+          operation: (NSCompositingOperation) op
+           fraction: (CGFloat) fraction
+     respectFlipped: (BOOL) respectFlipped
+              hints: (NSDictionary *) hints;
+
+- (CGImageRef) CGImageForProposedRect: (NSRect *) proposedDestRect
+                            context: (id) context
+                              hints: (NSDictionary *) hints;
 
 @end

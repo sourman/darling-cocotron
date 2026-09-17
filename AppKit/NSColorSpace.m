@@ -59,6 +59,10 @@ NSString *const _NSColorCoreUICatalogNamePrefix =
     return _cgColorSpace;
 }
 
+- (NSString *) localizedName {
+    return @"sRGB";
+}
+
 @end
 
 NSString* _NSColorSpaceNameFromNum(void) {

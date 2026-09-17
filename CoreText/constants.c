@@ -35,3 +35,5 @@ const CFStringRef kCTFontWidthTrait = CFSTR("NSCTFontWidthTrait");
 const CFStringRef kCTFontSlantTrait = CFSTR("NSCTFontSlantTrait");
 const CFStringRef kCTFontOpenTypeFeatureTag = CFSTR("CTFeatureOpenTypeTag");
 const CFStringRef kCTFontOpenTypeFeatureValue = CFSTR("CTFeatureOpenTypeValue");
+const CFStringRef kCTFontCollectionRemoveDuplicatesOption = CFSTR("CTFontCollectionRemoveDuplicatesOption");
+const CFStringRef kCTFontVariationAxesAttribute = CFSTR("NSCTFontVariationAxesAttribute");

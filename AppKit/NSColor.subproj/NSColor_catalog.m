@@ -21,6 +21,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 #import <AppKit/NSColor_catalog.h>
 #import <AppKit/NSDisplay.h>
 #import <AppKit/NSGraphics.h>
+#import <CoreGraphics/CGColor.h>
 
 @interface NSColor (NSAppKitPrivate)
 - (CGColorRef) CGColorRef;
@@ -112,10 +113,14 @@ NSColor *NSColorGetCatalogColor(NSColorListName catalogName,
 }
 
 - (CGColorRef) CGColor {
-    if (_color != nil)
-        return [_color CGColor];
-
-    return nil;
+    if (_color != nil) {
+        CGColorRef ref = [_color CGColor];
+        if (ref != nil)
+            return ref;
+    }
+    /* Catalog color with a nil display backing. Chrome NativeTheme
+       treats nil CGColor as ImmediateCrash after component CHECKs. */
+    return CGColorCreateGenericRGB(0.93, 0.93, 0.93, 1.0);
 }
 
 - (NSColor *) colorUsingColorSpaceName: (NSColorSpaceName) colorSpace {

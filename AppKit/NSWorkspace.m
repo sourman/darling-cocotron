@@ -308,6 +308,77 @@ NSNotificationName NSWorkspaceWillUnmountNotification = @"NSWorkspaceWillUnmount
     return nil;
 }
 
+- (BOOL) isVoiceOverEnabled {
+    return NO;
+}
+
+- (BOOL) isSwitchControlEnabled {
+    return NO;
+}
+
+- (BOOL) accessibilityDisplayShouldIncreaseContrast {
+    return NO;
+}
+
+- (BOOL) accessibilityDisplayShouldDifferentiateWithoutColor {
+    return NO;
+}
+
+- (BOOL) accessibilityDisplayShouldReduceMotion {
+    return NO;
+}
+
+- (BOOL) accessibilityDisplayShouldInvertColors {
+    return NO;
+}
+
+- (BOOL) accessibilityDisplayShouldReduceTransparency {
+    return NO;
+}
+
+- (NSURL *) URLForApplicationToOpenURL: (NSURL *) url {
+    // No LaunchServices default-handler map on Darling.
+    return nil;
+}
+
+- (NSURL *) URLForApplicationToOpenContentType: (id) contentType {
+    return nil;
+}
+
+- (NSRunningApplication *) frontmostApplication {
+    return nil;
+}
+
+- (void) openURL: (NSURL *) url
+   configuration: (NSWorkspaceOpenConfiguration *) configuration
+completionHandler:
+        (void (^)(NSRunningApplication *app, NSError *error)) completionHandler
+{
+    if (completionHandler)
+        completionHandler(nil, nil);
+}
+
+- (void) openURLs: (NSArray<NSURL *> *) urls
+        withApplicationAtURL: (NSURL *) applicationURL
+               configuration: (NSWorkspaceOpenConfiguration *) configuration
+           completionHandler:
+                   (void (^)(NSRunningApplication *app, NSError *error))
+                           completionHandler
+{
+    if (completionHandler)
+        completionHandler(nil, nil);
+}
+
+- (void) openApplicationAtURL: (NSURL *) applicationURL
+                configuration: (NSWorkspaceOpenConfiguration *) configuration
+            completionHandler:
+                    (void (^)(NSRunningApplication *app, NSError *error))
+                            completionHandler
+{
+    if (completionHandler)
+        completionHandler(nil, nil);
+}
+
 @end
 
 @implementation NSWorkspace (CocotronAdditions)

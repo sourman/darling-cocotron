@@ -17,3 +17,17 @@
  along with Darling.  If not, see <http://www.gnu.org/licenses/>.
 */
 #import "CGSSurfaceX11.h"
+#import "CGSWindowX11.h"
+
+@implementation CGSSurfaceX11
+
+- (CGError) setBounds: (CGRect) rect {
+	(void) rect;
+	return kCGSErrorSuccess;
+}
+
+- (void *) nativeWindow {
+	return [_window nativeWindow];
+}
+
+@end

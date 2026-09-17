@@ -169,6 +169,12 @@ APPKIT_EXPORT NSBitmapImageRepPropertyKey NSImageCurrentFrame;
 
 - (CGImageRef) CGImage;
 
+- (NSColorSpace *) colorSpace;
+
 - (NSBitmapImageRep *) bitmapImageRepByRetaggingWithColorSpace: (NSColorSpace *) newSpace;
+- (NSBitmapImageRep *) bitmapImageRepByConvertingToColorSpace: (NSColorSpace *) targetSpace
+                                             renderingIntent: (NSInteger) renderingIntent;
+
+- initWithCIImage: (id) ciImage;
 
 @end

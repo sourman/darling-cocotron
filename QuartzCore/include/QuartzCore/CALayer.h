@@ -97,6 +97,26 @@ CA_EXPORT NSString *const kCAContentsFormatGray8Uint;
 
 @property(copy) NSString *minificationFilter;
 @property(copy) NSString *magnificationFilter;
+@property BOOL geometryFlipped;
+@property unsigned int autoresizingMask;
+@property CGFloat contentsScale;
+@property BOOL masksToBounds;
+@property BOOL hidden;
+@property BOOL needsDisplayOnBoundsChange;
+@property CGFloat cornerRadius;
+@property CGFloat borderWidth;
+@property CGColorRef backgroundColor;
+@property CGColorRef borderColor;
+@property(copy) NSString *contentsGravity;
+@property unsigned int edgeAntialiasingMask;
+@property BOOL allowsEdgeAntialiasing;
+@property BOOL allowsGroupOpacity;
+@property BOOL doubleSided;
+@property CGFloat zPosition;
+@property(copy) NSString *name;
+@property(retain) id layoutManager;
+@property BOOL shouldRasterize;
+@property CGFloat rasterizationScale;
 
 - init;
 

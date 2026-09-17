@@ -2,8 +2,10 @@
 #import <Foundation/NSArray.h>
 #import <Foundation/NSNumber.h>
 #import <Foundation/NSString.h>
+#import <Foundation/NSRunLoop.h>
 #import <QuartzCore/CALayerContext.h>
 #import <QuartzCore/CATransaction.h>
+#import <stdio.h>
 
 NSString *const kCATransactionAnimationDuration =
         @"kCATransactionAnimationDuration";
@@ -48,7 +50,7 @@ static CATransactionGroup *createImplicitTransactionGroupIfNeeded() {
                        argument: nil
                           order: 0
                           modes: [NSArray arrayWithObject:
-                                                  NSDefaultRunLoopMode]];
+                                                  NSRunLoopCommonModes]];
     }
 
     return check;
@@ -102,10 +104,26 @@ static CATransactionGroup *createImplicitTransactionGroupIfNeeded() {
 }
 
 + (void) commit {
+    CATransactionGroup *group = currentTransactionGroup();
+    [group runCommitHandlers];
     [transactionStack() removeLastObject];
 }
 
 + (void) flush {
+    fprintf(stderr, "CATransaction flush presentAll\n");
+    fflush(stderr);
+    [CALayerContext presentAll];
+}
+
++ (void) addCommitHandler: (void (^)(void)) block forPhase: (NSInteger) phase {
+    (void) phase;
+    if (!block)
+        return;
+    fprintf(stderr, "catransaction_commit_handler_v2 queue phase=%ld\n",
+            (long) phase);
+    fflush(stderr);
+    CATransactionGroup *group = createImplicitTransactionGroupIfNeeded();
+    [group addCommitHandler: block];
 }
 
 + (void) lock {

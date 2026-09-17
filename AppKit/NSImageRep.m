@@ -18,11 +18,15 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 
 #import <AppKit/NSBitmapImageRep.h>
+#import <AppKit/NSColorSpace.h>
+#import <AppKit/NSGraphicsContext.h>
 #import <AppKit/NSGraphicsContextFunctions.h>
+#import <AppKit/NSImage.h>
 #import <AppKit/NSImageRep.h>
 #import <AppKit/NSPDFImageRep.h>
 #import <AppKit/NSPasteboard.h>
 #import <AppKit/NSRaise.h>
+#import <CoreGraphics/CGImage.h>
 
 @implementation NSImageRep
 
@@ -285,6 +289,10 @@ static NSMutableArray *_registeredClasses = nil;
     return _colorSpaceName;
 }
 
+- (NSColorSpace *) colorSpace {
+    return [NSColorSpace sRGBColorSpace];
+}
+
 - (NSInteger) bitsPerSample {
     return _bitsPerSample;
 }
@@ -341,6 +349,12 @@ static NSMutableArray *_registeredClasses = nil;
     NSSize size = [self size];
     BOOL result;
 
+    if (context == NULL)
+        return NO;
+    if (size.width <= 0 || size.height <= 0)
+        size = NSMakeSize(_pixelsWide > 0 ? _pixelsWide : 1,
+                          _pixelsHigh > 0 ? _pixelsHigh : 1);
+
     CGContextSaveGState(context);
     CGContextTranslateCTM(context, rect.origin.x, rect.origin.y);
     CGContextScaleCTM(context, rect.size.width / size.width,
@@ -349,6 +363,123 @@ static NSMutableArray *_registeredClasses = nil;
     CGContextRestoreGState(context);
 
     return result;
+}
+
+- (BOOL) drawInRect: (NSRect) dstRect
+           fromRect: (NSRect) srcRect
+          operation: (NSCompositingOperation) op
+           fraction: (CGFloat) fraction
+{
+    return [self drawInRect: dstRect
+                    fromRect: srcRect
+                   operation: op
+                    fraction: fraction
+              respectFlipped: YES
+                       hints: nil];
+}
+
+- (CGImageRef) CGImageForProposedRect: (NSRect *) proposedDestRect
+                            context: (id) context
+                              hints: (NSDictionary *) hints
+{
+    (void) proposedDestRect;
+    (void) context;
+    (void) hints;
+    if ([self isKindOfClass: [NSBitmapImageRep class]]) {
+        NSBitmapImageRep *bitmap = (NSBitmapImageRep *) self;
+        CGImageRef img = [bitmap CGImage];
+        if (img != NULL)
+            return img;
+        (void) [bitmap bitmapData];
+        return [bitmap CGImage];
+    }
+    return NULL;
+}
+
+- (BOOL) drawInRect: (NSRect) dstRect
+           fromRect: (NSRect) srcRect
+          operation: (NSCompositingOperation) op
+           fraction: (CGFloat) fraction
+     respectFlipped: (BOOL) respectFlipped
+              hints: (NSDictionary *) hints
+{
+    NSGraphicsContext *gctx = [NSGraphicsContext currentContext];
+    CGContextRef ctx = gctx ? [gctx graphicsPort] : NSCurrentGraphicsPort();
+    NSSize size = [self size];
+    NSRect src;
+    CGImageRef image = NULL;
+    CGImageRef owned = NULL;
+    CGRect dest;
+    id interp;
+
+    if (ctx == NULL)
+        return NO;
+    if (NSIsEmptyRect(dstRect))
+        return YES;
+    if (size.width <= 0 || size.height <= 0)
+        size = NSMakeSize(_pixelsWide > 0 ? _pixelsWide : 1,
+                          _pixelsHigh > 0 ? _pixelsHigh : 1);
+
+    src = srcRect;
+    if (NSIsEmptyRect(src))
+        src = NSMakeRect(0, 0, size.width, size.height);
+
+    if ([self isKindOfClass: [NSBitmapImageRep class]]) {
+        NSBitmapImageRep *bitmap = (NSBitmapImageRep *) self;
+        image = [bitmap CGImage];
+        if (image == NULL) {
+            (void) [bitmap bitmapData];
+            image = [bitmap CGImage];
+        }
+    }
+    if (image == NULL)
+        image = [self CGImageForProposedRect: &dstRect
+                                  context: gctx
+                                    hints: hints];
+
+    CGContextSaveGState(ctx);
+    if (gctx != nil) {
+        [gctx setCompositingOperation: op];
+        interp = [hints objectForKey: NSImageHintInterpolation];
+        if (interp != nil)
+            [gctx setImageInterpolation: [interp intValue]];
+    }
+    if (fraction < 1.0)
+        CGContextSetAlpha(ctx, fraction < 0 ? 0 : fraction);
+
+    if (image != NULL &&
+        !(src.origin.x == 0 && src.origin.y == 0 &&
+          src.size.width == size.width && src.size.height == size.height)) {
+        CGFloat imgW = (CGFloat) CGImageGetWidth(image);
+        CGFloat imgH = (CGFloat) CGImageGetHeight(image);
+        CGFloat sx = size.width > 0 ? imgW / size.width : 1;
+        CGFloat sy = size.height > 0 ? imgH / size.height : 1;
+        CGRect crop = CGRectMake(src.origin.x * sx,
+                                  imgH - (src.origin.y + src.size.height) * sy,
+                                  src.size.width * sx, src.size.height * sy);
+        owned = CGImageCreateWithImageInRect(image, crop);
+        if (owned != NULL)
+            image = owned;
+    }
+
+    dest = dstRect;
+    if (respectFlipped && gctx != nil && [gctx isFlipped]) {
+        CGContextTranslateCTM(ctx, dstRect.origin.x,
+                              dstRect.origin.y + dstRect.size.height);
+        CGContextScaleCTM(ctx, 1.0, -1.0);
+        dest.origin = CGPointZero;
+    }
+
+    if (image != NULL)
+        CGContextDrawImage(ctx, dest, image);
+    else
+        [self drawInRect: NSMakeRect(dest.origin.x, dest.origin.y,
+                                     dest.size.width, dest.size.height)];
+
+    CGContextRestoreGState(ctx);
+    if (owned != NULL)
+        CGImageRelease(owned);
+    return YES;
 }
 
 - (NSString *) description {

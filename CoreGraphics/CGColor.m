@@ -63,6 +63,50 @@ CGColorRef CGColorCreateCopyWithAlpha(CGColorRef self, CGFloat a) {
     return (CGColorRef)O2ColorCreateCopyWithAlpha((O2ColorRef)self, a);
 }
 
+CGColorRef CGColorCreateCopyByMatchingToColorSpace(
+        CGColorSpaceRef space, CGColorRenderingIntent intent, CGColorRef color,
+        CFDictionaryRef options)
+{
+    /* Apple converts `color` into `space`. Chrome's CGColorRefToSkColor
+       always calls this; a void stub returning NULL made the previous
+       O2Color NULL getters look like a 4-component clear and then
+       NativeTheme serialized a garbage enum. cgcolor_match_srgb_v1 */
+    __attribute__((used)) static const char cgcolor_match_srgb_v1[] =
+            "cgcolor_match_srgb_v1";
+    (void) cgcolor_match_srgb_v1;
+    (void) intent;
+    (void) options;
+    if (color == NULL)
+        return NULL;
+    if (space == NULL)
+        return CGColorCreateCopy(color);
+
+    const CGFloat *c = CGColorGetComponents(color);
+    size_t n = CGColorGetNumberOfComponents(color);
+    CGColorSpaceModel srcModel = CGColorSpaceGetModel(CGColorGetColorSpace(color));
+    CGFloat rgba[4] = {0, 0, 0, 1};
+    if (srcModel == kCGColorSpaceModelMonochrome && n >= 1) {
+        rgba[0] = rgba[1] = rgba[2] = c[0];
+        rgba[3] = (n >= 2) ? c[1] : 1;
+    } else if (n >= 4) {
+        rgba[0] = c[0];
+        rgba[1] = c[1];
+        rgba[2] = c[2];
+        rgba[3] = c[3];
+    } else if (n >= 3) {
+        rgba[0] = c[0];
+        rgba[1] = c[1];
+        rgba[2] = c[2];
+    }
+    if (CGColorSpaceGetModel(space) == kCGColorSpaceModelMonochrome) {
+        CGFloat gray[2];
+        gray[0] = (CGFloat) (0.299 * rgba[0] + 0.587 * rgba[1] + 0.114 * rgba[2]);
+        gray[1] = rgba[3];
+        return CGColorCreate(space, gray);
+    }
+    return CGColorCreate(space, rgba);
+}
+
 bool CGColorEqualToColor(CGColorRef self, CGColorRef other) {
     return O2ColorEqualToColor((O2ColorRef)self, (O2ColorRef)other);
 }

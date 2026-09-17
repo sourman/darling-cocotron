@@ -54,6 +54,7 @@
 #import <fcntl.h>
 #import <fontconfig/fontconfig.h>
 #import <stddef.h>
+#import <stdio.h>
 
 void NSColorSetCatalogColor(NSColorListName catalogName, NSColorName colorName, NSColor *color);
 
@@ -74,18 +75,41 @@ static void socketCallback(CFSocketRef s, CFSocketCallBackType type,
 
 - init {
     if (self = [super init]) {
+        const char *envDisplay = getenv("DISPLAY");
+        const char *envXauth = getenv("XAUTHORITY");
+        NSLog(@"X11Display -init DISPLAY=%s XAUTHORITY=%s",
+              envDisplay ? envDisplay : "(null)",
+              envXauth ? envXauth : "(null)");
 
         _display = XOpenDisplay(NULL);
+        NSLog(@"X11Display XOpenDisplay(NULL)=%p", _display);
+
+        if (_display == NULL) {
+            if (envDisplay && envDisplay[0]) {
+                _display = XOpenDisplay(envDisplay);
+                NSLog(@"X11Display XOpenDisplay(\"%s\")=%p", envDisplay, _display);
+            }
+        }
+
+        if (_display == NULL) {
+            _display = XOpenDisplay(":1");
+            NSLog(@"X11Display XOpenDisplay(\":1\")=%p", _display);
+        }
 
         if (_display == NULL) {
             _display = XOpenDisplay(":0");
+            NSLog(@"X11Display XOpenDisplay(\":0\")=%p", _display);
         }
 
         if (_display == NULL) {
-            // Failed to connect.
+            fprintf(stderr, "X11Display -init: all XOpenDisplay attempts failed\n");
+            fflush(stderr);
             [self release];
             return nil;
         }
+
+        fprintf(stderr, "X11Display connected display=%p\n", _display);
+        fflush(stderr);
 
         if (NSDebugEnabled)
             XSynchronize(_display, True);
@@ -140,6 +164,9 @@ static void socketCallback(CFSocketRef s, CFSocketCallBackType type,
         lastFocusedWindow = nil;
         lastClickTimeStamp = 0.0;
         clickCount = 0;
+        _lastXErrorCode = 0;
+        _lastXErrorSerial = 0;
+        _lastXErrorResource = 0;
     }
     return self;
 }
@@ -601,6 +628,14 @@ static NSDictionary *modeInfoToDictionary(const XRRModeInfo *mi, int depth) {
                                    green: 0.0f
                                     blue: 0.0f
                                    alpha: 0.847059f];
+    if ([colorName isEqual: @"secondaryLabelColor"])
+        return [NSColor colorWithCalibratedWhite: 0.5f alpha: 1.0f];
+    if ([colorName isEqual: @"controlAccentColor"] ||
+        [colorName isEqual: @"controlAccentBlueColor"])
+        return [NSColor colorWithCalibratedRed: 0.0f
+                                         green: 0.478431f
+                                          blue: 1.0f
+                                         alpha: 1.0f];
     if ([colorName isEqual: @"linkColor"])
         return [NSColor colorWithSRGBRed: 0.0f
                                    green: 0.411765f
@@ -1272,8 +1307,13 @@ static NSDictionary *modeInfoToDictionary(const XRRModeInfo *mi, int depth) {
                 [window frame].size.height - rect.origin.y - rect.size.height;
         // rect=NSInsetRect(rect, -10, -10);
         // [_backingContext addToDirtyRect:rect];
-        if (ev->xexpose.count == 0)
+        if (ev->xexpose.count == 0) {
+            fprintf(stderr, "X11Display Expose flush id=0x%lx %dx%d+%d+%d\n",
+                    (unsigned long) ev->xexpose.window, ev->xexpose.width,
+                    ev->xexpose.height, ev->xexpose.x, ev->xexpose.y);
+            fflush(stderr);
             [window flushBuffer];
+        }
 
         [delegate platformWindowExposed: window inRect: rect];
         break;
@@ -1428,11 +1468,45 @@ static NSDictionary *modeInfoToDictionary(const XRRModeInfo *mi, int depth) {
     }
 }
 
+- (void) clearLastXError {
+    _lastXErrorCode = 0;
+    _lastXErrorSerial = 0;
+    _lastXErrorResource = 0;
+}
+
+- (int) lastXErrorCode {
+    return _lastXErrorCode;
+}
+
+- (unsigned long) lastXErrorSerial {
+    return _lastXErrorSerial;
+}
+
 - (int) handleError: (XErrorEvent *) errorEvent {
-    NSLog(@"************** X11 ERROR!");
-    NSLog(@"Request code: %d:%d", errorEvent->request_code,
-          errorEvent->minor_code);
-    NSLog(@"Error code: %d", errorEvent->error_code);
+    char errbuf[256] = {0};
+    char reqbuf[64] = {0};
+    char reqkey[16];
+
+    XGetErrorText(_display, errorEvent->error_code, errbuf, sizeof(errbuf));
+    snprintf(reqkey, sizeof(reqkey), "%d", errorEvent->request_code);
+    XGetErrorDatabaseText(_display, "XRequest", reqkey, "unknown", reqbuf,
+                          sizeof(reqbuf));
+
+    _lastXErrorCode = errorEvent->error_code;
+    _lastXErrorSerial = errorEvent->serial;
+    _lastXErrorResource = errorEvent->resourceid;
+
+    fprintf(stderr,
+            "X11 ERROR serial=%lu request=%d:%d (%s) error=%d (%s) "
+            "resource=0x%lx\n",
+            errorEvent->serial, errorEvent->request_code,
+            errorEvent->minor_code, reqbuf, errorEvent->error_code, errbuf,
+            (unsigned long) errorEvent->resourceid);
+    fflush(stderr);
+
+    NSLog(@"************** X11 ERROR! %s request %d:%d (%s) resource 0x%lx",
+          errbuf, errorEvent->request_code, errorEvent->minor_code, reqbuf,
+          (unsigned long) errorEvent->resourceid);
     return 0;
 }
 

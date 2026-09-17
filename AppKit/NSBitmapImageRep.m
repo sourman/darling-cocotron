@@ -19,6 +19,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 
 #import <AppKit/NSBitmapImageRep-Private.h>
 #import <AppKit/NSColor.h>
+#import <AppKit/NSColorSpace.h>
 #import <AppKit/NSGraphicsContextFunctions.h>
 #import <AppKit/NSPasteboard.h>
 #import <AppKit/NSRaise.h>
@@ -769,6 +770,40 @@ NSBitmapImageRepPropertyKey NSImageCurrentFrame = @"NSImageCurrentFrame";
     return (CGImageRef)[(id)[self createCGImageIfNeeded] autorelease];
 }
 
+- (NSColorSpace *) colorSpace {
+    if (_cgImage != NULL) {
+        CGColorSpaceRef cg = CGImageGetColorSpace(_cgImage);
+        if (cg != NULL)
+            return [[[NSColorSpace alloc] initWithCGColorSpace: cg]
+                    autorelease];
+    }
+    {
+        CGColorSpaceRef cg = [self CGColorSpace];
+        if (cg != NULL)
+            return [[[NSColorSpace alloc] initWithCGColorSpace: cg]
+                    autorelease];
+    }
+    return [NSColorSpace sRGBColorSpace];
+}
+
+- initWithCIImage: (id) ciImage {
+    CGImageRef img = NULL;
+    if ([ciImage respondsToSelector: @selector(CGImage)])
+        img = (CGImageRef)[ciImage CGImage];
+    if (img != NULL)
+        return [self initWithCGImage: img];
+    return [self initWithBitmapDataPlanes: NULL
+                               pixelsWide: 1
+                               pixelsHigh: 1
+                            bitsPerSample: 8
+                          samplesPerPixel: 4
+                                 hasAlpha: YES
+                                 isPlanar: NO
+                           colorSpaceName: NSCalibratedRGBColorSpace
+                              bytesPerRow: 4
+                             bitsPerPixel: 32];
+}
+
 - (BOOL) draw {
     CGContextRef context = NSCurrentGraphicsPort();
     NSSize size = [self size];
@@ -818,8 +853,13 @@ NSBitmapImageRepPropertyKey NSImageCurrentFrame = @"NSImageCurrentFrame";
 }
 
 - (NSBitmapImageRep *) bitmapImageRepByRetaggingWithColorSpace: (NSColorSpace *) newSpace {
-    printf("STUB %s\n", __PRETTY_FUNCTION__);
-    return nil;
+    return self;
+}
+
+- (NSBitmapImageRep *) bitmapImageRepByConvertingToColorSpace: (NSColorSpace *) targetSpace
+                                             renderingIntent: (NSInteger) renderingIntent
+{
+    return self;
 }
 
 @end

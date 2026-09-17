@@ -188,6 +188,70 @@ static inline CGFloat calibratedWhiteFromRGB(CGFloat r, CGFloat g, CGFloat b) {
             REC601_LUMINANCE_B * b);
 }
 
+- (NSColor *) _colorFromCGColorUsingColorSpaceName: (NSString *) otherSpaceName {
+    if (_colorRef == nil)
+        return nil;
+
+    CGColorSpaceRef colorSpace = CGColorGetColorSpace(_colorRef);
+    CGColorSpaceModel model = CGColorSpaceGetModel(colorSpace);
+    const CGFloat *c = CGColorGetComponents(_colorRef);
+    if (c == NULL)
+        return nil;
+
+    CGFloat red = 0, green = 0, blue = 0, alpha = 1;
+
+    if (model == kCGColorSpaceModelRGB) {
+        red = c[0];
+        green = c[1];
+        blue = c[2];
+        alpha = c[3];
+    } else if (model == kCGColorSpaceModelMonochrome) {
+        red = green = blue = c[0];
+        alpha = c[1];
+    } else if (model == kCGColorSpaceModelCMYK) {
+        CGFloat white = 1 - c[3];
+        red = (c[0] > white ? 0 : white - c[0]);
+        green = (c[1] > white ? 0 : white - c[1]);
+        blue = (c[2] > white ? 0 : white - c[2]);
+        alpha = c[4];
+    } else {
+        return nil;
+    }
+
+    if ([otherSpaceName isEqualToString: NSCalibratedRGBColorSpace])
+        return [NSColor colorWithCalibratedRed: red
+                                         green: green
+                                          blue: blue
+                                         alpha: alpha];
+    if ([otherSpaceName isEqualToString: NSDeviceRGBColorSpace])
+        return [NSColor colorWithDeviceRed: red
+                                     green: green
+                                      blue: blue
+                                     alpha: alpha];
+    if ([otherSpaceName isEqualToString: NSCalibratedWhiteColorSpace])
+        return [NSColor colorWithCalibratedWhite: calibratedWhiteFromRGB(
+                                                          red, green, blue)
+                                           alpha: alpha];
+    if ([otherSpaceName isEqualToString: NSDeviceWhiteColorSpace])
+        return [NSColor colorWithDeviceWhite: calibratedWhiteFromRGB(
+                                                      red, green, blue)
+                                       alpha: alpha];
+    return nil;
+}
+
+- (NSColor *) colorUsingColorSpaceName: (NSString *) otherSpaceName {
+    if (otherSpaceName == nil ||
+        [otherSpaceName isEqualToString: _colorSpaceName])
+        return self;
+
+    NSColor *converted =
+            [self colorUsingColorSpaceName: otherSpaceName device: nil];
+    if (converted != nil)
+        return converted;
+
+    return [self _colorFromCGColorUsingColorSpaceName: otherSpaceName];
+}
+
 - (NSColor *) colorUsingColorSpaceName: (NSString *) otherSpaceName
                                 device: (NSDictionary *) device
 {
@@ -364,8 +428,33 @@ static inline CGFloat calibratedWhiteFromRGB(CGFloat r, CGFloat g, CGFloat b) {
                                                     spaceName: NSPatternColorSpace] autorelease];
         }
     } else if ([_colorSpaceName isEqualToString: NSNamedColorSpace]) {
-        CGFloat red = components[0], green = components[1],
-                blue = components[2], alpha = components[3];
+        NSColor *fromCG =
+                [self _colorFromCGColorUsingColorSpaceName: otherSpaceName];
+        if (fromCG != nil)
+            return fromCG;
+
+        CGFloat red = 0, green = 0, blue = 0, alpha = 1;
+        NSInteger n = CGColorGetNumberOfComponents(_colorRef);
+        if (n >= 4) {
+            red = components[0];
+            green = components[1];
+            blue = components[2];
+            alpha = components[3];
+        } else if (n >= 2) {
+            red = green = blue = components[0];
+            alpha = components[1];
+        }
+
+        if ([otherSpaceName isEqualToString: NSCalibratedRGBColorSpace])
+            return [NSColor colorWithCalibratedRed: red
+                                             green: green
+                                              blue: blue
+                                             alpha: alpha];
+
+        if ([otherSpaceName isEqualToString: NSCalibratedWhiteColorSpace])
+            return [NSColor colorWithCalibratedWhite: calibratedWhiteFromRGB(
+                                                              red, green, blue)
+                                               alpha: alpha];
 
         if ([otherSpaceName isEqualToString: NSPatternColorSpace]) {
             CGColorSpaceRef currentColorSpace = CGColorGetColorSpace(_colorRef);
@@ -391,6 +480,15 @@ static inline CGFloat calibratedWhiteFromRGB(CGFloat r, CGFloat g, CGFloat b) {
                                          alpha: alpha];
     } else if ([_colorSpaceName isEqualToString: NSCustomColorSpace]) {
         CGFloat white = components[0], alpha = components[1];
+
+        if ([otherSpaceName isEqualToString: NSCalibratedRGBColorSpace])
+            return [NSColor colorWithCalibratedRed: white
+                                             green: white
+                                              blue: white
+                                             alpha: alpha];
+
+        if ([otherSpaceName isEqualToString: NSCalibratedWhiteColorSpace])
+            return [NSColor colorWithCalibratedWhite: white alpha: alpha];
 
         if ([otherSpaceName isEqualToString: NSDeviceRGBColorSpace])
             return [NSColor colorWithDeviceRed: white

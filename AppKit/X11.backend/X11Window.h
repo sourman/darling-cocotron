@@ -33,6 +33,7 @@
     Display *_display;
     XVisualInfo *_visualInfo;
     Window _window;
+    GC _gc;
     CGLContextObj _cglContext;
     CGLWindowRef _cglWindow;
     CAWindowOpenGLContext *_caContext;

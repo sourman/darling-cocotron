@@ -1,4 +1,5 @@
 #import "CATransactionGroup.h"
+#import <Foundation/NSArray.h>
 #import <Foundation/NSDictionary.h>
 #import <Foundation/NSNumber.h>
 #import <QuartzCore/CATransaction.h>
@@ -7,6 +8,7 @@
 
 - init {
     _values = [[NSMutableDictionary alloc] init];
+    _commitHandlers = [[NSMutableArray alloc] init];
     [_values setObject: [NSNumber numberWithFloat: 0.25]
                 forKey: kCATransactionAnimationDuration];
     [_values setObject: [NSNumber numberWithBool: NO]
@@ -16,12 +18,31 @@
     return self;
 }
 
+- (void) dealloc {
+    [_commitHandlers release];
+    [_values release];
+    [super dealloc];
+}
+
 - valueForKey: (NSString *) key {
     return [_values objectForKey: key];
 }
 
 - (void) setValue: value forKey: (NSString *) key {
     [_values setObject: value forKey: key];
+}
+
+- (void) addCommitHandler: (void (^)(void)) block {
+    if (block)
+        [_commitHandlers addObject: [[block copy] autorelease]];
+}
+
+- (void) runCommitHandlers {
+    NSArray *handlers = [_commitHandlers copy];
+    [_commitHandlers removeAllObjects];
+    for (void (^block)(void) in handlers)
+        block();
+    [handlers release];
 }
 
 @end

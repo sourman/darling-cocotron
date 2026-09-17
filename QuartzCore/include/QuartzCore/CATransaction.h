@@ -25,6 +25,7 @@ CA_EXPORT NSString *const kCATransactionCompletionBlock;
 + (void) begin;
 + (void) commit;
 + (void) flush;
++ (void) addCommitHandler: (void (^)(void)) block forPhase: (NSInteger) phase;
 
 + (void) lock;
 + (void) unlock;

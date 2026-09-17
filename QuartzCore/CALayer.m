@@ -1,8 +1,10 @@
 #import <Foundation/NSDictionary.h>
+#import <Foundation/NSNumber.h>
 #import <QuartzCore/CAAnimation.h>
 #import <QuartzCore/CALayer.h>
 #import <QuartzCore/CALayerContext.h>
 #import <QuartzCore/CATransaction.h>
+#import <objc/runtime.h>
 
 NSString *const kCAFilterLinear = @"linear";
 NSString *const kCAFilterNearest = @"nearest";
@@ -171,6 +173,185 @@ NSString *const kCAContentsFormatGray8Uint = @"Gray8";
     _opaque = value;
 }
 
+static const void *kCALayerGeometryFlipped;
+static const void *kCALayerAutoresizingMask;
+static const void *kCALayerContentsScale;
+static const void *kCALayerMasksToBounds;
+static const void *kCALayerHidden;
+static const void *kCALayerNeedsDisplayOnBoundsChange;
+static const void *kCALayerCornerRadius;
+static const void *kCALayerBorderWidth;
+static const void *kCALayerBackgroundColor;
+static const void *kCALayerBorderColor;
+static const void *kCALayerContentsGravity;
+static const void *kCALayerEdgeAntialiasingMask;
+static const void *kCALayerAllowsEdgeAntialiasing;
+static const void *kCALayerAllowsGroupOpacity;
+static const void *kCALayerDoubleSided;
+static const void *kCALayerZPosition;
+static const void *kCALayerName;
+static const void *kCALayerLayoutManager;
+static const void *kCALayerShouldRasterize;
+static const void *kCALayerRasterizationScale;
+
+#define CA_ASSOC_BOOL(key) \
+    [objc_getAssociatedObject(self, key) boolValue]
+#define CA_SET_BOOL(key, v) \
+    objc_setAssociatedObject(self, key, [NSNumber numberWithBool: (v)], OBJC_ASSOCIATION_RETAIN)
+#define CA_ASSOC_UINT(key) \
+    [objc_getAssociatedObject(self, key) unsignedIntValue]
+#define CA_SET_UINT(key, v) \
+    objc_setAssociatedObject(self, key, [NSNumber numberWithUnsignedInt: (v)], OBJC_ASSOCIATION_RETAIN)
+#define CA_ASSOC_FLOAT(key, dflt) \
+    ({ NSNumber *_n = objc_getAssociatedObject(self, key); _n ? [_n doubleValue] : (dflt); })
+#define CA_SET_FLOAT(key, v) \
+    objc_setAssociatedObject(self, key, [NSNumber numberWithDouble: (v)], OBJC_ASSOCIATION_RETAIN)
+
+- (BOOL) geometryFlipped {
+    return CA_ASSOC_BOOL(&kCALayerGeometryFlipped);
+}
+- (void) setGeometryFlipped: (BOOL) value {
+    CA_SET_BOOL(&kCALayerGeometryFlipped, value);
+}
+
+- (unsigned int) autoresizingMask {
+    return CA_ASSOC_UINT(&kCALayerAutoresizingMask);
+}
+- (void) setAutoresizingMask: (unsigned int) value {
+    CA_SET_UINT(&kCALayerAutoresizingMask, value);
+}
+
+- (CGFloat) contentsScale {
+    return CA_ASSOC_FLOAT(&kCALayerContentsScale, 1.0);
+}
+- (void) setContentsScale: (CGFloat) value {
+    CA_SET_FLOAT(&kCALayerContentsScale, value);
+}
+
+- (BOOL) masksToBounds {
+    return CA_ASSOC_BOOL(&kCALayerMasksToBounds);
+}
+- (void) setMasksToBounds: (BOOL) value {
+    CA_SET_BOOL(&kCALayerMasksToBounds, value);
+}
+
+- (BOOL) isHidden {
+    return CA_ASSOC_BOOL(&kCALayerHidden);
+}
+- (void) setHidden: (BOOL) value {
+    CA_SET_BOOL(&kCALayerHidden, value);
+}
+
+- (BOOL) needsDisplayOnBoundsChange {
+    return CA_ASSOC_BOOL(&kCALayerNeedsDisplayOnBoundsChange);
+}
+- (void) setNeedsDisplayOnBoundsChange: (BOOL) value {
+    CA_SET_BOOL(&kCALayerNeedsDisplayOnBoundsChange, value);
+}
+
+- (CGFloat) cornerRadius {
+    return CA_ASSOC_FLOAT(&kCALayerCornerRadius, 0);
+}
+- (void) setCornerRadius: (CGFloat) value {
+    CA_SET_FLOAT(&kCALayerCornerRadius, value);
+}
+
+- (CGFloat) borderWidth {
+    return CA_ASSOC_FLOAT(&kCALayerBorderWidth, 0);
+}
+- (void) setBorderWidth: (CGFloat) value {
+    CA_SET_FLOAT(&kCALayerBorderWidth, value);
+}
+
+- (CGColorRef) backgroundColor {
+    return (CGColorRef) objc_getAssociatedObject(self, &kCALayerBackgroundColor);
+}
+- (void) setBackgroundColor: (CGColorRef) value {
+    objc_setAssociatedObject(self, &kCALayerBackgroundColor, (id) value, OBJC_ASSOCIATION_RETAIN);
+}
+
+- (CGColorRef) borderColor {
+    return (CGColorRef) objc_getAssociatedObject(self, &kCALayerBorderColor);
+}
+- (void) setBorderColor: (CGColorRef) value {
+    objc_setAssociatedObject(self, &kCALayerBorderColor, (id) value, OBJC_ASSOCIATION_RETAIN);
+}
+
+- (NSString *) contentsGravity {
+    NSString *g = objc_getAssociatedObject(self, &kCALayerContentsGravity);
+    return g ? g : kCAGravityResize;
+}
+- (void) setContentsGravity: (NSString *) value {
+    objc_setAssociatedObject(self, &kCALayerContentsGravity, value, OBJC_ASSOCIATION_COPY);
+}
+
+- (unsigned int) edgeAntialiasingMask {
+    NSNumber *n = objc_getAssociatedObject(self, &kCALayerEdgeAntialiasingMask);
+    return n ? [n unsignedIntValue] : 0x0f;
+}
+- (void) setEdgeAntialiasingMask: (unsigned int) value {
+    CA_SET_UINT(&kCALayerEdgeAntialiasingMask, value);
+}
+
+- (BOOL) allowsEdgeAntialiasing {
+    NSNumber *n = objc_getAssociatedObject(self, &kCALayerAllowsEdgeAntialiasing);
+    return n ? [n boolValue] : YES;
+}
+- (void) setAllowsEdgeAntialiasing: (BOOL) value {
+    CA_SET_BOOL(&kCALayerAllowsEdgeAntialiasing, value);
+}
+
+- (BOOL) allowsGroupOpacity {
+    NSNumber *n = objc_getAssociatedObject(self, &kCALayerAllowsGroupOpacity);
+    return n ? [n boolValue] : YES;
+}
+- (void) setAllowsGroupOpacity: (BOOL) value {
+    CA_SET_BOOL(&kCALayerAllowsGroupOpacity, value);
+}
+
+- (BOOL) isDoubleSided {
+    NSNumber *n = objc_getAssociatedObject(self, &kCALayerDoubleSided);
+    return n ? [n boolValue] : YES;
+}
+- (void) setDoubleSided: (BOOL) value {
+    CA_SET_BOOL(&kCALayerDoubleSided, value);
+}
+
+- (CGFloat) zPosition {
+    return CA_ASSOC_FLOAT(&kCALayerZPosition, 0);
+}
+- (void) setZPosition: (CGFloat) value {
+    CA_SET_FLOAT(&kCALayerZPosition, value);
+}
+
+- (NSString *) name {
+    return objc_getAssociatedObject(self, &kCALayerName);
+}
+- (void) setName: (NSString *) value {
+    objc_setAssociatedObject(self, &kCALayerName, value, OBJC_ASSOCIATION_COPY);
+}
+
+- (id) layoutManager {
+    return objc_getAssociatedObject(self, &kCALayerLayoutManager);
+}
+- (void) setLayoutManager: (id) value {
+    objc_setAssociatedObject(self, &kCALayerLayoutManager, value, OBJC_ASSOCIATION_RETAIN);
+}
+
+- (BOOL) shouldRasterize {
+    return CA_ASSOC_BOOL(&kCALayerShouldRasterize);
+}
+- (void) setShouldRasterize: (BOOL) value {
+    CA_SET_BOOL(&kCALayerShouldRasterize, value);
+}
+
+- (CGFloat) rasterizationScale {
+    return CA_ASSOC_FLOAT(&kCALayerRasterizationScale, 1.0);
+}
+- (void) setRasterizationScale: (CGFloat) value {
+    CA_SET_FLOAT(&kCALayerRasterizationScale, value);
+}
+
 - (id) contents {
     return _contents;
 }
@@ -286,6 +467,10 @@ NSString *const kCAContentsFormatGray8Uint = @"Gray8";
 }
 
 - (void) displayIfNeeded {
+    if (_needsDisplay) {
+        [self display];
+        _needsDisplay = NO;
+    }
 }
 
 - (void) drawInContext: (CGContextRef) context {

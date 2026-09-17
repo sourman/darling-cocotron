@@ -90,6 +90,7 @@ add_framework(QuartzCore
 	FAT
 	CURRENT_VERSION
 	SOURCES
+		extra_comet_stubs.m
 		${QuartzCore_sources}
 	VERSION ${FRAMEWORK_VERSION}
 	DEPENDENCIES

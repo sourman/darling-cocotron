@@ -29,6 +29,7 @@ typedef enum {
     NSImageInterpolationNone = kCGInterpolationNone,
     NSImageInterpolationLow = kCGInterpolationLow,
     NSImageInterpolationHigh = kCGInterpolationHigh,
+    NSImageInterpolationMedium = 4,
 } NSImageInterpolation;
 
 typedef enum {

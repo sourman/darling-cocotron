@@ -422,6 +422,15 @@ NSNotificationName const NSSystemColorsDidChangeNotification = @"NSSystemColorsD
                                colorName: @"selectedKnobColor"];
 }
 
++ (NSUInteger) currentControlTint {
+    /* NativeTheme / mojo enum {aqua, graphite} CHECKs value < 2.
+       Missing getter left eax as 0x42c67cf9. */
+    __attribute__((used)) static const char nscolor_control_tint_v1[] =
+            "nscolor_control_tint_v1";
+    (void) nscolor_control_tint_v1;
+    return 0; /* NSDefaultControlTint / aqua */
+}
+
 + (NSColor *) windowBackgroundColor {
     return [NSColor controlColor];
 }
@@ -458,6 +467,21 @@ NSNotificationName const NSSystemColorsDidChangeNotification = @"NSSystemColorsD
 
 + (NSColor *) labelColor {
     return [NSColor colorWithCatalogName: @"System" colorName: @"labelColor"];
+}
+
++ (NSColor *) secondaryLabelColor {
+    return [NSColor colorWithCatalogName: @"System"
+                               colorName: @"secondaryLabelColor"];
+}
+
++ (NSColor *) controlAccentColor {
+    return [NSColor colorWithCatalogName: @"System"
+                               colorName: @"controlAccentColor"];
+}
+
++ (NSColor *) controlAccentBlueColor {
+    return [NSColor colorWithCatalogName: @"System"
+                               colorName: @"controlAccentBlueColor"];
 }
 
 + (NSColor *) unemphasizedSelectedTextColor {
@@ -907,6 +931,12 @@ static void releasePatternInfo(void *info) {
 - (NSColor *) colorUsingColorSpaceName: (NSColorSpaceName) colorSpace {
     NSInvalidAbstractInvocation();
     return nil;
+}
+
+- (NSColor *) colorUsingColorSpace: (NSColorSpace *) space {
+    if (space == nil)
+        return nil;
+    return [self colorUsingColorSpaceName: NSCalibratedRGBColorSpace];
 }
 
 - (NSColor *) colorUsingColorSpaceName: (NSColorSpaceName) colorSpace

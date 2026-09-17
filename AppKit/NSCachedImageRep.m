@@ -23,6 +23,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 #import <AppKit/NSWindow.h>
 #import <CoreGraphics/CGWindow.h>
 
+__attribute__((used)) const char nscachedimagerep_no_auto_orderfront_v1[] =
+        "nscachedimagerep_no_auto_orderfront_v1";
+
 @implementation NSCachedImageRep
 
 - (instancetype) initWithWindow: (NSWindow *) window rect: (NSRect) rect {
@@ -30,8 +33,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
     _window = [window retain];
     _origin = rect.origin;
 
-    // This is a little broken, the windows get resized to larger size when
-    // on-screen.
+    // Offscreen NSCachedImageRep cache. Chrome never orderFronts it
+    // (style NSAppKitPrivateWindow). Do not map; NSShowAllWindows only.
     if ([[NSUserDefaults standardUserDefaults] boolForKey: @"NSShowAllWindows"])
         [_window orderFront: nil];
     return self;

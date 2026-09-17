@@ -20,9 +20,20 @@
 #define CGSWINDOWX11_H
 
 #import <CoreGraphics/CGSWindow.h>
+#import <X11/Xlib.h>
 
-@interface CGSWindowX11 : CGSWindow
+@interface CGSWindowX11 : CGSWindow {
+	Display *_display;
+	Window _window;
+	BOOL _mapped;
+	CGRect _rect;
+}
+
+- (instancetype) initWithRegion: (CGSRegionRef) region
+                     connection: (CGSConnection *) connection
+                       windowID: (CGSWindowID) windowID
+                        display: (Display *) display;
+
 @end
 
 #endif
-

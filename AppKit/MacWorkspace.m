@@ -1,5 +1,8 @@
 #import "MacWorkspace.h"
 #import <AppKit/NSApplication.h>
+#import <AppKit/NSBitmapImageRep.h>
+#import <AppKit/NSGraphics.h>
+#import <AppKit/NSImage.h>
 #import <AppKit/NSRaise.h>
 #include <LaunchServices/LaunchServices.h>
 
@@ -13,21 +16,45 @@
 
 @implementation MacWorkspace
 
+static NSImage *_macWorkspacePlaceholderIcon(void)
+{
+    static NSImage *icon;
+    if (icon)
+        return icon;
+    icon = [[NSImage alloc] initWithSize: NSMakeSize(1.0, 1.0)];
+    NSBitmapImageRep *rep = [[NSBitmapImageRep alloc]
+            initWithBitmapDataPlanes: NULL
+                          pixelsWide: 1
+                          pixelsHigh: 1
+                       bitsPerSample: 8
+                     samplesPerPixel: 4
+                            hasAlpha: YES
+                            isPlanar: NO
+                      colorSpaceName: NSCalibratedRGBColorSpace
+                         bytesPerRow: 4
+                        bitsPerPixel: 32];
+    unsigned char *px = [rep bitmapData];
+    if (px) {
+        px[0] = 0;
+        px[1] = 0;
+        px[2] = 0;
+        px[3] = 255;
+    }
+    [icon addRepresentation: rep];
+    [rep release];
+    return icon;
+}
+
 - (NSImage *) iconForFile: (NSString *) path {
-    // TODO: call GetIconRefFromFileInfo()
-    NSUnimplementedMethod();
-    return NULL;
+    return _macWorkspacePlaceholderIcon();
 }
 
 - (NSImage *) iconForFiles: (NSArray *) array {
-    NSUnimplementedMethod();
-    return NULL;
+    return _macWorkspacePlaceholderIcon();
 }
 
 - (NSImage *) iconForFileType: (NSString *) type {
-    // TODO: call GetIconRefFromTypeInfo()
-    NSUnimplementedMethod();
-    return NULL;
+    return _macWorkspacePlaceholderIcon();
 }
 
 - (NSString *) localizedDescriptionForType: (NSString *) type {

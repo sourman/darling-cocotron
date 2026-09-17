@@ -29,6 +29,7 @@ typedef NSString *NSColorSpaceName;
 
 @class NSImage;
 @class NSPasteboard;
+@class NSColorSpace;
 
 @interface NSColor : NSObject <NSCopying, NSCoding> {
     NSColorListName _catalogName;
@@ -37,6 +38,8 @@ typedef NSString *NSColorSpaceName;
 }
 
 @property(class, strong, readonly) NSColor *labelColor;
+@property(class, strong, readonly) NSColor *secondaryLabelColor;
+@property(class, strong, readonly) NSColor *controlAccentColor;
 
 @property(class, strong, readonly) NSColor *textColor;
 @property(class, strong, readonly) NSColor *selectedTextColor;
@@ -159,6 +162,7 @@ typedef NSString *NSColorSpaceName;
 
 + (NSColor *) windowBackgroundColor;
 + (NSColor *) windowFrameColor;
++ (NSUInteger) currentControlTint;
 
 + (NSColor *) selectedMenuItemColor;
 + (NSColor *) selectedMenuItemTextColor;
@@ -271,6 +275,7 @@ typedef NSString *NSColorSpaceName;
 - (NSColor *) colorUsingColorSpaceName: (NSString *) colorSpace;
 - (NSColor *) colorUsingColorSpaceName: (NSString *) colorSpace
                                 device: (NSDictionary *) device;
+- (NSColor *) colorUsingColorSpace: (NSColorSpace *) space;
 
 - (NSColor *) blendedColorWithFraction: (CGFloat) fraction
                                ofColor: (NSColor *) color;

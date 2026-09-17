@@ -79,6 +79,7 @@ set(CoreGraphics_sources
 	CGDisplayStream.m
 	src/CGEvent.c
 	src/stubs.c
+	extra_comet_stubs.c
 	CGFont.m
 	CGFunction.m
 	CGGeometry.m

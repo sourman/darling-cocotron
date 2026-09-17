@@ -40,6 +40,9 @@
     KeySym _lastKeySym;
     int _rrEventBase;
     NSArray* _lastScreens;
+    int _lastXErrorCode;
+    unsigned long _lastXErrorSerial;
+    XID _lastXErrorResource;
 
 @public
     XIM _xim;
@@ -51,4 +54,7 @@
 
 - (CGFloat) doubleClickInterval;
 - (int) handleError: (XErrorEvent *) errorEvent;
+- (void) clearLastXError;
+- (int) lastXErrorCode;
+- (unsigned long) lastXErrorSerial;
 @end

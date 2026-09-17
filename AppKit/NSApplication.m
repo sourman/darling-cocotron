@@ -18,7 +18,9 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 
 #import <AppKit/NSAlert.h>
+#import <AppKit/NSAppearance.h>
 #import <AppKit/NSApplication.h>
+#import <objc/runtime.h>
 #import <AppKit/NSColorPanel.h>
 #import <AppKit/NSDisplay.h>
 #import <AppKit/NSDockTile.h>
@@ -42,6 +44,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 #import <CoreGraphics/CGWindow.h>
 #import <objc/message.h>
 #import <pthread.h>
+#import <stdio.h>
+
+const char nsapp_chrome_window_v1[] = "nsapp_chrome_window_v1";
+
+#define NSAPP_CHROME_WINDOW_LOG(fmt, ...)                                      \
+    do {                                                                       \
+        fprintf(stderr, "nsapp_chrome_window_v1 " fmt "\n", ##__VA_ARGS__);    \
+        fflush(stderr);                                                        \
+    } while (0)
 
 const NSRunLoopMode NSModalPanelRunLoopMode = @"NSModalPanelRunLoopMode";
 const NSRunLoopMode NSEventTrackingRunLoopMode = @"NSEventTrackingRunLoopMode";
@@ -101,7 +112,25 @@ NSApplication *NSApp = nil;
 - initWithOwner: owner;
 @end
 
+static const void *NSApplicationAppearanceKey = &NSApplicationAppearanceKey;
+
 @implementation NSApplication
+
+- (NSAppearance *) appearance {
+    return objc_getAssociatedObject(self, NSApplicationAppearanceKey);
+}
+
+- (void) setAppearance: (NSAppearance *) appearance {
+    objc_setAssociatedObject(self, NSApplicationAppearanceKey, appearance,
+                             OBJC_ASSOCIATION_RETAIN);
+}
+
+- (NSAppearance *) effectiveAppearance {
+    NSAppearance *appearance = [self appearance];
+    if (appearance != nil)
+        return appearance;
+    return [NSAppearance currentDrawingAppearance];
+}
 
 + (NSApplication *) sharedApplication {
     if (NSApp == nil) {
@@ -176,6 +205,9 @@ NSApplication *NSApp = nil;
                            (CFStringRef) NSEventTrackingRunLoopMode);
 
     pthread_mutex_init(_lock, NULL);
+
+    NSAPP_CHROME_WINDOW_LOG("NSApplication init self=%p class=%s display=%p",
+                            self, class_getName([self class]), _display);
 
     [self _showSplashImage];
 
@@ -260,6 +292,8 @@ NSApplication *NSApp = nil;
 }
 
 - (BOOL) isActive {
+    if (_isActive)
+        return YES;
     return [self isActiveExcludingWindow: nil];
 }
 
@@ -381,6 +415,9 @@ NSApplication *NSApp = nil;
 
 - (void) setDelegate: delegate {
     if (delegate != _delegate) {
+        NSAPP_CHROME_WINDOW_LOG(
+                "setDelegate %p class=%s", delegate,
+                delegate ? class_getName([delegate class]) : "(nil)");
         [self unregisterDelegate];
         _delegate = delegate;
         [self registerDelegate];
@@ -419,8 +456,9 @@ NSApplication *NSApp = nil;
 }
 
 - (BOOL) setActivationPolicy: (NSApplicationActivationPolicy) activationPolicy {
-    // TODO: Implement
-    return NO;
+    NSAPP_CHROME_WINDOW_LOG("setActivationPolicy %ld -> YES",
+                            (long) activationPolicy);
+    return YES;
 }
 
 - (void) setWindowsMenu: (NSMenu *) menu {
@@ -550,6 +588,8 @@ NSApplication *NSApp = nil;
 }
 
 - (void) finishLaunching {
+    NSAPP_CHROME_WINDOW_LOG("finishLaunching begin delegate=%p windows=%lu",
+                            _delegate, (unsigned long) [_windows count]);
     NSAutoreleasePool *pool = [NSAutoreleasePool new];
     BOOL needsUntitled = YES;
 
@@ -615,6 +655,10 @@ NSApplication *NSApp = nil;
     NS_HANDLER [self reportException: localException];
     NS_ENDHANDLER
 
+    [self activateIgnoringOtherApps: YES];
+
+    NSAPP_CHROME_WINDOW_LOG("finishLaunching end windows=%lu",
+                            (unsigned long) [_windows count]);
             [pool release];
 }
 
@@ -643,15 +687,27 @@ NSApplication *NSApp = nil;
 
 - (void) _checkForTerminate {
     int count = [_windows count];
+    BOOL anyNonPanel = NO;
 
     while (--count >= 0) {
         NSWindow *check = [_windows objectAtIndex: count];
 
-        if (![check isKindOfClass: [NSPanel class]] && [check isVisible]) {
+        if ([check isKindOfClass: [NSPanel class]])
+            continue;
+        anyNonPanel = YES;
+        if ([check isVisible]) {
             return;
         }
     }
 
+    // Real AppKit does not quit merely because no window is visible yet.
+    // Chrome creates its NSWindow asynchronously after DidFinishLaunching;
+    // auto-terminate here would kill the browser before orderFront.
+    if (!anyNonPanel)
+        return;
+
+    NSAPP_CHROME_WINDOW_LOG(
+            "_checkForTerminate last non-panel window not visible");
     [self terminate: self];
 }
 
@@ -669,6 +725,8 @@ NSApplication *NSApp = nil;
     static BOOL didlaunch = NO;
     NSAutoreleasePool *pool;
 
+    NSAPP_CHROME_WINDOW_LOG("NSApplication run didlaunch=%d delegate=%p",
+                            didlaunch, _delegate);
     _isRunning = YES;
 
     if (!didlaunch) {
@@ -926,7 +984,15 @@ NSApplication *NSApp = nil;
 }
 
 - (void) activateIgnoringOtherApps: (BOOL) flag {
-    NSUnimplementedMethod();
+    (void) flag;
+    _isActive = YES;
+    [[NSNotificationCenter defaultCenter]
+            postNotificationName: NSApplicationDidBecomeActiveNotification
+                          object: self];
+    NSArray *windows = [[_windows copy] autorelease];
+    for (NSWindow *window in windows) {
+        [window orderFront: self];
+    }
 }
 
 - (void) deactivate {
@@ -1153,6 +1219,9 @@ NSApplication *NSApp = nil;
 }
 
 - (void) reportException: (NSException *) exception {
+    NSAPP_CHROME_WINDOW_LOG("NSApplication exception %s: %s",
+                            [[exception name] UTF8String] ?: "?",
+                            [[exception reason] UTF8String] ?: "?");
     NSLog(@"NSApplication got exception: %@", exception);
 }
 
@@ -1255,6 +1324,8 @@ NSApplication *NSApp = nil;
 }
 
 - (void) terminate: sender {
+    NSAPP_CHROME_WINDOW_LOG("terminate: sender=%p windows=%lu", sender,
+                            (unsigned long) [_windows count]);
     [[NSDocumentController sharedDocumentController]
             closeAllDocumentsWithDelegate: self
                       didCloseAllSelector: @selector

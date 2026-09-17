@@ -1,11 +1,44 @@
 #import <Foundation/NSString.h>
+#import <Foundation/NSTimer.h>
+#import <Foundation/NSRunLoop.h>
+#import <Foundation/NSArray.h>
+#import <Foundation/NSNumber.h>
 #import <QuartzCore/CALayer.h>
 #import <QuartzCore/CALayerContext.h>
 #import <QuartzCore/CARenderer.h>
 #import "CALayerInternal.h"
 #import <OpenGL/CGLInternal.h>
+#import <OpenGL/gl.h>
+#import <stdio.h>
 
 @class CAMetalLayerInternal;
+
+__attribute__((used)) const char calayer_glx_swap_v2[] =
+        "calayer_glx_swap_v2";
+
+#define CALAYER_CTX_MAX 64
+static CALayerContext *g_layerContexts[CALAYER_CTX_MAX];
+static int g_layerContextCount;
+static int g_presenting;
+
+static void CALayerContextRegister(CALayerContext *ctx) {
+    int i;
+    for (i = 0; i < g_layerContextCount; i++)
+        if (g_layerContexts[i] == ctx)
+            return;
+    if (g_layerContextCount < CALAYER_CTX_MAX)
+        g_layerContexts[g_layerContextCount++] = ctx;
+}
+
+static void CALayerContextUnregister(CALayerContext *ctx) {
+    int i;
+    for (i = 0; i < g_layerContextCount; i++) {
+        if (g_layerContexts[i] == ctx) {
+            g_layerContexts[i] = g_layerContexts[--g_layerContextCount];
+            return;
+        }
+    }
+}
 
 @implementation CALayerContext
 
@@ -27,17 +60,21 @@
               __LINE__);
 
     _frame = rect;
+    _deleteTextureIds = [[NSMutableArray alloc] init];
 
     _renderer = [[CARenderer rendererWithCGLContext: _glContext
                                             options: nil] retain];
+    CALayerContextRegister(self);
 
     return self;
 }
 
 - (void) dealloc {
+    CALayerContextUnregister(self);
     [_timer invalidate];
     [_timer release];
     [_renderer release];
+    [_deleteTextureIds release];
     CGLReleaseContext(_glContext);
     CGLDestroyWindow(_cglWindow);
     [_subwindow release];
@@ -75,6 +112,7 @@
     [oldSubwindow release];
 
     [_subwindow setFrame: _frame];
+    [self startTimerIfNeeded];
 }
 
 - (void) invalidate {
@@ -94,13 +132,27 @@
 }
 
 - (void) renderLayer: (CALayer *) layer {
-    CGLContextMakeCurrentAndAttachToWindow(_glContext, _cglWindow);
+    if (!_glContext || !_cglWindow)
+        return;
 
-    glEnable(GL_DEPTH_TEST);
-    glShadeModel(GL_SMOOTH);
+    CGLContextMakeCurrentAndAttachToWindow(_glContext, _cglWindow);
 
     GLint width = _frame.size.width;
     GLint height = _frame.size.height;
+    GLint dw = 0, dh = 0;
+    if (CGLGetDrawableSize(_glContext, &dw, &dh) == kCGLNoError) {
+        if (dw > width)
+            width = dw;
+        if (dh > height)
+            height = dh;
+    }
+    if (width < 1)
+        width = 1;
+    if (height < 1)
+        height = 1;
+
+    glEnable(GL_DEPTH_TEST);
+    glShadeModel(GL_SMOOTH);
 
     glViewport(0, 0, width, height);
     glMatrixMode(GL_PROJECTION);
@@ -108,7 +160,8 @@
     glOrtho(0, width, 0, height, -1, 1);
 
     GLsizei i = 0;
-    GLuint deleteIds[[_deleteTextureIds count]];
+    NSUInteger nDelete = [_deleteTextureIds count];
+    GLuint deleteIds[nDelete > 0 ? nDelete : 1];
 
     for (NSNumber *number in _deleteTextureIds)
         deleteIds[i++] = [number unsignedIntValue];
@@ -127,6 +180,13 @@
     }
 
     [_renderer render];
+    CGLFlushDrawable(_glContext);
+    static int renders = 0;
+    if (renders < 16) {
+        fprintf(stderr, "CALayerContext render+swap frame=%dx%d n=%d\n",
+                (int) width, (int) height, ++renders);
+        fflush(stderr);
+    }
 }
 
 - (void) render {
@@ -142,12 +202,19 @@
 }
 
 - (void) startTimerIfNeeded {
-    if (_timer == nil)
-        _timer = [[NSTimer scheduledTimerWithTimeInterval: 1.0 / 60.0
-                                                   target: self
-                                                 selector: @selector(timer:)
-                                                 userInfo: nil
-                                                  repeats: YES] retain];
+    if (_timer == nil) {
+        _timer = [[NSTimer timerWithTimeInterval: 1.0 / 60.0
+                                          target: self
+                                        selector: @selector(timer:)
+                                        userInfo: nil
+                                         repeats: YES] retain];
+        /* Chrome's pump is not NSDefaultRunLoopMode; CommonModes fires. */
+        [[NSRunLoop currentRunLoop] addTimer: _timer
+                                     forMode: NSRunLoopCommonModes];
+        fprintf(stderr, "CALayerContext startTimer CommonModes frame=%.0fx%.0f\n",
+                _frame.size.width, _frame.size.height);
+        fflush(stderr);
+    }
 }
 
 - (void) deleteTextureId: (NSNumber *) textureId {
@@ -156,6 +223,25 @@
 
 - (void) flush {
     CGLFlushDrawable(_glContext);
+    static int flushes = 0;
+    if (flushes < 8) {
+        fprintf(stderr, "CALayerContext CGLFlushDrawable n=%d\n", ++flushes);
+        fflush(stderr);
+    }
+}
+
++ (void) presentAll {
+    int i, n;
+    CALayerContext *copy[CALAYER_CTX_MAX];
+    if (g_presenting)
+        return;
+    g_presenting = 1;
+    n = g_layerContextCount;
+    for (i = 0; i < n; i++)
+        copy[i] = g_layerContexts[i];
+    for (i = 0; i < n; i++)
+        [copy[i] render];
+    g_presenting = 0;
 }
 
 @end

@@ -19,6 +19,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 
 #import <ApplicationServices/ApplicationServices.h>
 #import <Foundation/NSObject.h>
+#import <Foundation/NSString.h>
 
 @interface NSColorSpace : NSObject {
     CGColorSpaceRef _cgColorSpace;
@@ -26,11 +27,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 
 @property(class, strong, readonly) NSColorSpace *deviceRGBColorSpace;
 @property(class, strong, readonly) NSColorSpace *sRGBColorSpace;
+@property(copy, readonly) NSString *localizedName;
 
 + (NSColorSpace *) deviceRGBColorSpace;
++ (NSColorSpace *) sRGBColorSpace;
 
 - initWithCGColorSpace: (CGColorSpaceRef) cgColorSpace;
 
 - (CGColorSpaceRef) CGColorSpace;
+- (NSString *) localizedName;
 
 @end

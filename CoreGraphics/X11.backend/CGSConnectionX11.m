@@ -17,12 +17,15 @@
  along with Darling.  If not, see <http://www.gnu.org/licenses/>.
 */
 #import "CGSConnectionX11.h"
+#import "CGSWindowX11.h"
 #import <CoreGraphics/CGSKeyboardLayout.h>
+#import <Foundation/NSNumber.h>
 #include "CarbonKeys.h"
 #import "X11KeySymToUCS.h"
 #import <Foundation/NSDebug.h>
 #import <Foundation/NSString.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <stdatomic.h>
 #import <X11/Xutil.h>
 #import <X11/extensions/Xrandr.h>
@@ -52,16 +55,40 @@ static void socketCallback(CFSocketRef s, CFSocketCallBackType type, CFDataRef a
 
 -(instancetype) initWithConnectionID:(CGSConnectionID)connId
 {
+	const char *envDisplay = getenv("DISPLAY");
+
 	_display = XOpenDisplay(NULL);
+	if (!_display && envDisplay && envDisplay[0])
+		_display = XOpenDisplay(envDisplay);
+	if (!_display)
+		_display = XOpenDisplay(":1");
 	if (!_display)
 		_display = XOpenDisplay(":0");
-	
+
 	if (!_display)
 	{
-		NSLog(@"CGSConnectionX11: XOpenDisplay() failed\n");
-
+		fprintf(stderr, "CGSConnectionX11: XOpenDisplay() failed DISPLAY=%s\n",
+		    envDisplay ? envDisplay : "(null)");
+		fflush(stderr);
 		[self release];
 		return nil;
+	}
+	fprintf(stderr, "CGSConnectionX11 XOpenDisplay=%p DISPLAY=%s\n",
+	    _display, envDisplay ? envDisplay : "(null)");
+	fflush(stderr);
+
+	{
+		Window w = XCreateWindow(_display, DefaultRootWindow(_display), 80, 80,
+		    800, 600, 0, CopyFromParent, InputOutput, CopyFromParent, 0, NULL);
+		static char res_name[] = "Comet";
+		static char res_class[] = "Comet";
+		XClassHint hint = { .res_name = res_name, .res_class = res_class };
+		XSetClassHint(_display, w, &hint);
+		XStoreName(_display, w, "Comet");
+		XMapWindow(_display, w);
+		XFlush(_display);
+		fprintf(stderr, "XMapWindow id=0x%lx\n", (unsigned long) w);
+		fflush(stderr);
 	}
 	self = [super initWithConnectionID: connId];
 
@@ -366,9 +393,24 @@ static void socketCallback(CFSocketRef s, CFSocketCallBackType type, CFDataRef a
 	}
 }
 
+-(void*) nativeDisplay
+{
+	return _display;
+}
+
 -(CGSWindow*) newWindow:(CGSRegionRef)region
 {
-
+	CGSWindowID wid = _nextWindowId++;
+	CGSWindowX11 *window = [[CGSWindowX11 alloc] initWithRegion: region
+	                                                connection: self
+	                                                  windowID: wid
+	                                                   display: _display];
+	if (window == nil)
+		return nil;
+	@synchronized (_windows) {
+		[_windows setObject: window forKey: [NSNumber numberWithInt: wid]];
+	}
+	return [window autorelease];
 }
 
 +(BOOL) isAvailable

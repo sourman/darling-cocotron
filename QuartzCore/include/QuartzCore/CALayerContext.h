@@ -37,4 +37,6 @@
 
 - (void) flush;
 
++ (void) presentAll;
+
 @end

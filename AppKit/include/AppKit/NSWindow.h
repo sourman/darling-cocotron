@@ -420,6 +420,8 @@ APPKIT_EXPORT const NSNotificationName NSWindowDidExposeNotification;
 
 - (NSEventModifierFlags) resizeFlags;
 - (CGFloat) userSpaceScaleFactor;
+- (CGFloat) backingScaleFactor;
+- (NSUInteger) occlusionState;
 - (NSResponder *) firstResponder;
 
 - (NSButton *) standardWindowButton: (NSWindowButton) value;
@@ -431,6 +433,9 @@ APPKIT_EXPORT const NSNotificationName NSWindowDidExposeNotification;
 
 - (NSInteger) windowNumber;
 - (int) gState;
+
+@property(strong) NSAppearance *appearance;
+@property(readonly, strong) NSAppearance *effectiveAppearance;
 
 @property(readonly, strong) NSScreen *screen;
 @property(readonly, strong) NSScreen *deepestScreen;

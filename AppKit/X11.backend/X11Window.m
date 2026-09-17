@@ -32,38 +32,39 @@
 #import <Onyx2D/O2ImageSource.h>
 #import <Onyx2D/O2Surface.h>
 #import <QuartzCore/CAWindowOpenGLContext.h>
+#import <QuartzCore/CATransaction.h>
 
 #import "X11Display.h"
 #import "X11SubWindow.h"
 #import "X11Window.h"
 #import <X11/Xatom.h>
 #import <X11/Xutil.h>
+#import <math.h>
+#import <stdio.h>
+#import <stdlib.h>
+#import <string.h>
+
+/* X CreateWindow width/height are CARD16 and must be >= 1. NaN/<=0 would
+   truncate to 0 and the server replies BadValue. */
+static unsigned int x11ClampExtent(CGFloat n) {
+    if (!(n >= 1.0))
+        return 1;
+    if (n > 65535.0)
+        return 65535;
+    unsigned int u = (unsigned int) n;
+    return u < 1 ? 1 : u;
+}
+
+__attribute__((used)) const char x11_createwindow_min1_v1[] =
+        "x11_createwindow_min1_v1";
+__attribute__((used)) const char onyx2d_xputimage_default_visual_v1[] =
+        "onyx2d_xputimage_default_visual_v1";
 
 @implementation X11Window
 
 + (Visual *) visual {
-    static Visual *ret = NULL;
-
-    if (!ret) {
-        int visuals_matched, i;
-        XVisualInfo match = {0};
-        Display *dpy = [(X11Display *) [NSDisplay currentDisplay] display];
-
-        XVisualInfo *info = XGetVisualInfo(dpy, 0, &match, &visuals_matched);
-
-        for (i = 0; i < visuals_matched; i++) {
-            if (info[i].depth == 32 && (info[i].red_mask == 0xff0000 &&
-                                        info[i].green_mask == 0x00ff00 &&
-                                        info[i].blue_mask == 0x0000ff)) {
-                ret = info[i].visual;
-            }
-        }
-        XFree(info);
-        if (!ret)
-            ret = DefaultVisual(dpy, DefaultScreen(dpy));
-    }
-
-    return ret;
+    Display *dpy = [(X11Display *) [NSDisplay currentDisplay] display];
+    return DefaultVisual(dpy, DefaultScreen(dpy));
 }
 
 static NSData *makeWindowIcon() {
@@ -162,49 +163,62 @@ static NSData *makeWindowIcon() {
     BOOL isPanel = [delegate isKindOfClass: [NSPanel class]];
     if (isPanel && _styleMask & NSDocModalWindowMask)
         _styleMask = NSBorderlessWindowMask;
-    // TODO: get rid of these glX calls
-    GLint att[] = {GLX_RGBA,
-                   GLX_DOUBLEBUFFER,
-                   GLX_RED_SIZE,
-                   4,
-                   GLX_GREEN_SIZE,
-                   4,
-                   GLX_BLUE_SIZE,
-                   4,
-                   GLX_DEPTH_SIZE,
-                   4,
-                   None};
 
     int screen = DefaultScreen(_display);
-
-    if ((_visualInfo = glXChooseVisual(_display, screen, att)) == NULL) {
-        NSLog(@"glXChooseVisual failed at %s %d", __FILE__, __LINE__);
-    }
-
-    Colormap cmap =
-            XCreateColormap(_display, RootWindow(_display, _visualInfo->screen),
-                            _visualInfo->visual, AllocNone);
-
-    if (cmap < 0) {
-        NSLog(@"XCreateColormap failed");
-        [self release];
-        return nil;
-    }
+    Window root = RootWindow(_display, screen);
+    /* Window and GLX must share the 24-bit DefaultVisual. glXChooseVisual
+       RGBA+DOUBLEBUFFER returns a different visualid (0x1d5 here) which
+       BadMatches a DefaultVisual window; a 32-bit GLX visual plus a private
+       colormap is BadValue on DCV (max colormaps = 1). */
+    Visual *visual = DefaultVisual(_display, screen);
+    int depth = DefaultDepth(_display, screen);
+    Colormap cmap = DefaultColormap(_display, screen);
+    XVisualInfo visTemplate;
+    memset(&visTemplate, 0, sizeof(visTemplate));
+    visTemplate.visualid = XVisualIDFromVisual(visual);
+    int nvis = 0;
+    _visualInfo = XGetVisualInfo(_display, VisualIDMask, &visTemplate, &nvis);
+    _gc = 0;
 
     XSetWindowAttributes xattr;
-    unsigned long xattr_mask;
+    unsigned long xattr_mask = CWOverrideRedirect | CWColormap | CWBorderPixel;
     xattr.override_redirect =
             _styleMask == NSBorderlessWindowMask ? True : False;
-    xattr_mask = CWOverrideRedirect | CWColormap;
     xattr.colormap = cmap;
+    xattr.border_pixel = BlackPixel(_display, screen);
 
-    _window = XCreateWindow(
-            _display, DefaultRootWindow(_display), _frame.origin.x,
-            _frame.origin.y, _frame.size.width, _frame.size.height, 0,
-            (_visualInfo == NULL) ? CopyFromParent : _visualInfo->depth,
-            InputOutput,
-            (_visualInfo == NULL) ? CopyFromParent : _visualInfo->visual,
-            xattr_mask, &xattr);
+    unsigned int width = x11ClampExtent(_frame.size.width);
+    unsigned int height = x11ClampExtent(_frame.size.height);
+    int x = (int) _frame.origin.x;
+    int y = (int) _frame.origin.y;
+    _frame.size.width = width;
+    _frame.size.height = height;
+
+    [x11disp clearLastXError];
+    _window = XCreateWindow(_display, root, x, y, width, height, 0, depth,
+                            InputOutput, visual, xattr_mask, &xattr);
+    unsigned long createSerial = NextRequest(_display) - 1;
+    XSync(_display, False);
+
+    fprintf(stderr,
+            "X11Window XCreateWindow id=0x%lx frame={{%d,%d},{%u,%u}} "
+            "depth=%d vis=0x%lx cmap=0x%lx xerr=%d serial=%lu mapped=%d\n",
+            (unsigned long) _window, x, y, width, height, depth,
+            (unsigned long) XVisualIDFromVisual(visual),
+            (unsigned long) cmap, [x11disp lastXErrorCode], createSerial,
+            _mapped);
+    fflush(stderr);
+
+    if (!_window || ([x11disp lastXErrorCode] != 0 &&
+                     [x11disp lastXErrorSerial] == createSerial)) {
+        fprintf(stderr, "X11Window XCreateWindow FAILED id=0x%lx err=%d\n",
+                (unsigned long) _window, [x11disp lastXErrorCode]);
+        fflush(stderr);
+        _window = 0;
+        return self;
+    }
+
+    _gc = XCreateGC(_display, _window, 0, NULL);
 
     [self syncDelegateProperties];
 
@@ -254,7 +268,9 @@ static NSData *makeWindowIcon() {
         XNFocusWindow, _window,
         NULL);
 
-    _cglWindow = CGLGetWindow((void *) _window);
+    // Do not CGLGetWindow/ensureMapped here. Mapping every X11Window at
+    // create (including NSCachedImageRep's 32x32 cache) hung recvmsg
+    // after NSApp init. GL is attached lazily if Chrome requests it.
 
     [(X11Display *) [NSDisplay currentDisplay] setWindow: self forID: _window];
 
@@ -354,9 +370,17 @@ static NSData *makeWindowIcon() {
                     sizeof(hints) / sizeof(long));
 }
 
+__attribute__((used)) const char x11_ensure_mapped_show_path_v1[] =
+        "x11_ensure_mapped_show_path_v1";
+
 - (void) ensureMapped {
+    if (!_window)
+        return;
     if (!_mapped) {
         XMapWindow(_display, _window);
+        XFlush(_display);
+        fprintf(stderr, "XMapWindow id=0x%lx\n", (unsigned long) _window);
+        fflush(stderr);
         _mapped = YES;
     }
 }
@@ -409,6 +433,15 @@ static NSData *makeWindowIcon() {
     if (_cglWindow != NULL) {
         CGLDestroyWindow(_cglWindow);
         _cglWindow = NULL;
+    }
+
+    if (_gc) {
+        XFreeGC(_display, _gc);
+        _gc = 0;
+    }
+    if (_visualInfo) {
+        XFree(_visualInfo);
+        _visualInfo = NULL;
     }
 
     if (_window) {
@@ -474,8 +507,12 @@ static NSData *makeWindowIcon() {
 
 - (void) setFrame: (O2Rect) frame {
     frame = [self transformFrame: frame];
-    XMoveResizeWindow(_display, _window, frame.origin.x, frame.origin.y,
-                      frame.size.width, frame.size.height);
+    if (_window) {
+        XMoveResizeWindow(_display, _window, (int) frame.origin.x,
+                          (int) frame.origin.y,
+                          x11ClampExtent(frame.size.width),
+                          x11ClampExtent(frame.size.height));
+    }
     [self invalidateContextWithNewSize: frame.size];
     _frame = frame;
 }
@@ -512,6 +549,8 @@ static NSData *makeWindowIcon() {
 }
 
 - (void) hideWindow {
+    if (!_window)
+        return;
     XUnmapWindow(_display, _window);
     _mapped = NO;
 }
@@ -590,6 +629,13 @@ static NSData *makeWindowIcon() {
 }
 
 - (void) createCGLContextObjIfNeeded {
+    if (_cglWindow == NULL) {
+        [self ensureMapped];
+        _cglWindow = CGLGetWindow((void *) _window);
+        fprintf(stderr, "X11Window CGLGetWindow id=0x%lx cgl=%p\n",
+                (unsigned long) _window, _cglWindow);
+        fflush(stderr);
+    }
     if (_cglContext == NULL) {
         CGLError error;
 
@@ -597,10 +643,8 @@ static NSData *makeWindowIcon() {
             kCGLNoError) {
             NSLog(@"CGLCreateContext failed at %s %d with error %d", __FILE__,
                   __LINE__, error);
-
-            [NSException raise: NSGenericException
-                        format: @"Failed to create GL context, CGL error %d",
-                                error];
+            _cglContext = NULL;
+            return;
         }
         if ((error = CGLContextMakeCurrentAndAttachToWindow(
                      _cglContext, _cglWindow)) != kCGLNoError)
@@ -614,33 +658,87 @@ static NSData *makeWindowIcon() {
     }
 }
 
-- (void) openGLFlushBuffer {
-    CGLError error;
+static void x11PutO2Surface(X11Window *self, O2Surface *surface) {
+    if (!self->_window || !self->_gc || !surface)
+        return;
 
+    size_t width = O2ImageGetWidth(surface);
+    size_t height = O2ImageGetHeight(surface);
+    size_t srcBpr = O2ImageGetBytesPerRow(surface);
+    unsigned char *src = [surface pixelBytes];
+    if (!src || width < 1 || height < 1)
+        return;
+
+    int screen = DefaultScreen(self->_display);
+    Visual *visual = DefaultVisual(self->_display, screen);
+    int depth = DefaultDepth(self->_display, screen);
+    size_t dstBpr = width * 4;
+    char *dst = malloc(dstBpr * height);
+    if (!dst)
+        return;
+
+    /* O2Surface is BGRA little-endian; DCV 24-bit TrueColor is BGR0 in
+       32-bit padded pixels. Copy RGB, drop alpha. */
+    size_t copy = width * 4;
+    if (srcBpr < copy)
+        copy = srcBpr;
+    for (size_t y = 0; y < height; y++)
+        memcpy(dst + y * dstBpr, src + y * srcBpr, copy);
+
+    XImage *img = XCreateImage(self->_display, visual, (unsigned int) depth,
+                               ZPixmap, 0, dst, (unsigned int) width,
+                               (unsigned int) height, 32, (int) dstBpr);
+    if (!img) {
+        free(dst);
+        return;
+    }
+    img->byte_order = LSBFirst;
+    img->bitmap_bit_order = LSBFirst;
+    img->bits_per_pixel = 32;
+    XPutImage(self->_display, self->_window, self->_gc, img, 0, 0, 0, 0,
+              (unsigned int) width, (unsigned int) height);
+    XFlush(self->_display);
+    fprintf(stderr,
+            "X11Window Onyx2D XPutImage id=0x%lx %zux%zu depth=%d vis=0x%lx\n",
+            (unsigned long) self->_window, width, height, depth,
+            (unsigned long) XVisualIDFromVisual(visual));
+    fflush(stderr);
+    img->data = NULL;
+    XDestroyImage(img);
+    free(dst);
+}
+
+- (void) openGLFlushBuffer {
     CGLContextObj prevContext = CGLGetCurrentContext();
 
     [self createCGLContextObjIfNeeded];
-    if (_caContext == nil)
-        return;
+    if (_caContext != nil) {
+        O2Surface *glSurface = [_context surface];
+        size_t width = O2ImageGetWidth(glSurface);
+        size_t height = O2ImageGetHeight(glSurface);
 
-    O2Surface *surface = [_context surface];
-    size_t width = O2ImageGetWidth(surface);
-    size_t height = O2ImageGetHeight(surface);
+        [_caContext prepareViewportWidth: width height: height];
+        [_caContext renderSurface: glSurface];
 
-    [_caContext prepareViewportWidth: width height: height];
-    [_caContext renderSurface: surface];
+        glFlush();
+        CGLFlushDrawable(_cglContext);
+    }
 
-    glFlush();
-    CGLFlushDrawable(_cglContext);
+    /* Onyx2D CPU blit last so a failed/black GL clear cannot hide pixels. */
+    if (_context)
+        x11PutO2Surface(self, [_context surface]);
 
     CGLSetCurrentContext(prevContext);
 }
 
 - (void) flushBuffer {
-    if (_context == nil)
-        return;
-    O2ContextFlush(_context);
-    [self openGLFlushBuffer];
+    if (_context != nil) {
+        O2ContextFlush(_context);
+        [self openGLFlushBuffer];
+    }
+    /* CALayer-hosted Chrome windows often have no Onyx2D surface. Still
+       present GLX/CA from Expose on CommonModes. */
+    [CATransaction flush];
 }
 
 - (void) setLastKnownCursorPosition: (CGPoint) point {
@@ -714,8 +812,8 @@ static int ignoreBadWindow(Display *display, XErrorEvent *errorEvent) {
     return NSMakeRect(frame.origin.x,
                       DisplayHeight(_display, DefaultScreen(_display)) -
                               frame.origin.y - frame.size.height,
-                      fmax(frame.size.width, 1.0),
-                      fmax(frame.size.height, 1.0));
+                      x11ClampExtent(frame.size.width),
+                      x11ClampExtent(frame.size.height));
 }
 
 - (NSPoint) transformPoint: (NSPoint) pos; {

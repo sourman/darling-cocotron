@@ -35,7 +35,13 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 }
 
 + (NSScrollerStyle) preferredScrollerStyle {
-    NSUnimplementedMethod();
+    /* Chrome NativeTheme serializes this as a 2-value mojo enum
+       (legacy/overlay) and ImmediateCrashs if >= 2. The old stub called
+       NSUnimplementedMethod() with no return, leaving eax=0x42c67cf9. */
+    __attribute__((used)) static const char nsscroller_preferred_style_v1[] =
+            "nsscroller_preferred_style_v1";
+    (void) nsscroller_preferred_style_v1;
+    return NSScrollerStyleLegacy;
 }
 /* OS X has a global default "AppleScrollBarVariant" with the values: Single,
  DoubleMin, DoubleMax, and DoubleBoth This controls the default position of the

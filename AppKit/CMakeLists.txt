@@ -452,6 +452,7 @@ set(AppKit_sources
 	NSHaptics.m
 	NSDataAsset.m
 	NSSwitch.m
+	CometStubs.m
 	NSTextFinder.m
 	NSScrubber.m
 	NSScrubberItemView.m

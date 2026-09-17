@@ -20,7 +20,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 #import <AppKit/AppKitExport.h>
 #import <Foundation/Foundation.h>
 
-@class NSImage, NSView;
+@class NSImage, NSView, NSRunningApplication, NSWorkspaceOpenConfiguration;
 
 APPKIT_EXPORT NSString *const NSWorkspaceApplicationKey;
 
@@ -136,7 +136,33 @@ typedef NSUInteger NSWorkspaceIconCreationOptions;
 - (void) activateFileViewerSelectingURLs: (NSArray<NSURL *> *) fileURLs;
 - (NSURL *) URLForApplicationWithBundleIdentifier:
         (NSString *) bundleIdentifier;
+- (NSURL *) URLForApplicationToOpenURL: (NSURL *) url;
+- (NSURL *) URLForApplicationToOpenContentType: (id) contentType;
+- (NSRunningApplication *) frontmostApplication;
+- (void) openURL: (NSURL *) url
+   configuration: (NSWorkspaceOpenConfiguration *) configuration
+completionHandler:
+        (void (^)(NSRunningApplication *app, NSError *error)) completionHandler;
+- (void) openURLs: (NSArray<NSURL *> *) urls
+        withApplicationAtURL: (NSURL *) applicationURL
+               configuration: (NSWorkspaceOpenConfiguration *) configuration
+           completionHandler:
+                   (void (^)(NSRunningApplication *app, NSError *error))
+                           completionHandler;
+- (void) openApplicationAtURL: (NSURL *) applicationURL
+                configuration: (NSWorkspaceOpenConfiguration *) configuration
+            completionHandler:
+                    (void (^)(NSRunningApplication *app, NSError *error))
+                            completionHandler;
 - (NSString *) fullPathForApplication: (NSString *) appName;
+
+- (BOOL) isVoiceOverEnabled;
+- (BOOL) isSwitchControlEnabled;
+- (BOOL) accessibilityDisplayShouldIncreaseContrast;
+- (BOOL) accessibilityDisplayShouldDifferentiateWithoutColor;
+- (BOOL) accessibilityDisplayShouldReduceMotion;
+- (BOOL) accessibilityDisplayShouldInvertColors;
+- (BOOL) accessibilityDisplayShouldReduceTransparency;
 
 @end
 

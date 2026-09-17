@@ -1,10 +1,15 @@
 #import <CoreVideo/CoreVideo.h>
 #import <Onyx2D/O2Surface.h>
+#import <Onyx2D/O2Image.h>
 #import <OpenGL/OpenGL.h>
+#import <OpenGL/CGLInternal.h>
 #import <QuartzCore/CAAnimation.h>
 #import <QuartzCore/CAMediaTimingFunction.h>
 #import <QuartzCore/CARenderer.h>
 #import "CALayerInternal.h"
+#import <dlfcn.h>
+#import <stdio.h>
+#import <objc/runtime.h>
 
 NSString *const kCARendererColorSpace = @"kCARendererColorSpace";
 
@@ -221,13 +226,27 @@ static GLint interpolationFromName(NSString *name) {
 }
 
 void CATexImage2DCGImage(CGImageRef image) {
+    if (!image || ![(id) image isKindOfClass: [O2Image class]])
+        return;
+
     size_t imageWidth = CGImageGetWidth(image);
     size_t imageHeight = CGImageGetHeight(image);
+    if (imageWidth < 1 || imageHeight < 1)
+        return;
+
     CGBitmapInfo bitmapInfo = CGImageGetBitmapInfo(image);
 
     CGDataProviderRef provider = CGImageGetDataProvider(image);
+    if (!provider)
+        return;
     CFDataRef data = CGDataProviderCopyData(provider);
+    if (!data)
+        return;
     const uint8_t *pixelBytes = CFDataGetBytePtr(data);
+    if (!pixelBytes) {
+        CFRelease(data);
+        return;
+    }
 
     GLenum glFormat = GL_BGRA;
     GLenum glType = GL_UNSIGNED_INT_8_8_8_8_REV;
@@ -272,12 +291,65 @@ void CATexImage2DCGImage(CGImageRef image) {
 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, imageWidth, imageHeight, 0,
                  glFormat, glType, pixelBytes);
+    CGLPutBGRAOnDrawable(CGLGetCurrentContext(), pixelBytes, (int) imageWidth,
+                         (int) imageHeight, (int) (imageWidth * 4));
+    CFRelease(data);
+}
+
+static int CATexImageIOSurface(id contents) {
+    typedef CFTypeID (*GetTypeIDFn)(void);
+    typedef size_t (*GetSizeFn)(void *);
+    typedef void *(*GetBaseFn)(void *);
+    typedef int (*LockFn)(void *, uint32_t, uint32_t *);
+    static GetTypeIDFn pTypeID;
+    static GetSizeFn pWidth, pHeight, pBpr;
+    static GetBaseFn pBase;
+    static LockFn pLock, pUnlock;
+    static int tried;
+    if (!tried) {
+        tried = 1;
+        pTypeID = (GetTypeIDFn) dlsym(RTLD_DEFAULT, "IOSurfaceGetTypeID");
+        pWidth = (GetSizeFn) dlsym(RTLD_DEFAULT, "IOSurfaceGetWidth");
+        pHeight = (GetSizeFn) dlsym(RTLD_DEFAULT, "IOSurfaceGetHeight");
+        pBpr = (GetSizeFn) dlsym(RTLD_DEFAULT, "IOSurfaceGetBytesPerRow");
+        pBase = (GetBaseFn) dlsym(RTLD_DEFAULT, "IOSurfaceGetBaseAddress");
+        pLock = (LockFn) dlsym(RTLD_DEFAULT, "IOSurfaceLock");
+        pUnlock = (LockFn) dlsym(RTLD_DEFAULT, "IOSurfaceUnlock");
+    }
+    if (!contents || !pTypeID || CFGetTypeID(contents) != pTypeID())
+        return 0;
+    if (pLock)
+        pLock(contents, 1 /* read-only */, NULL);
+    size_t w = pWidth ? pWidth(contents) : 0;
+    size_t h = pHeight ? pHeight(contents) : 0;
+    size_t bpr = pBpr ? pBpr(contents) : 0;
+    void *base = pBase ? pBase(contents) : NULL;
+    if (base && w > 0 && h > 0) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, (GLsizei) w, (GLsizei) h, 0,
+                     GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, base);
+        CGLPutBGRAOnDrawable(CGLGetCurrentContext(), base, (int) w, (int) h,
+                             (int) bpr);
+    }
+    if (pUnlock)
+        pUnlock(contents, 1, NULL);
+    static int nios = 0;
+    if (nios < 8) {
+        fprintf(stderr, "CARenderer IOSurface %zux%zu bpr=%zu n=%d\n", w, h,
+                bpr, ++nios);
+        fflush(stderr);
+    }
+    return 1;
 }
 
 - (void) _renderLayer: (CALayer *) layer
                     z: (CGFloat) z
           currentTime: (CFTimeInterval) currentTime
 {
+    if (!layer)
+        return;
+
+    [layer displayIfNeeded];
+
     NSNumber *textureId = [layer _textureId];
     GLuint texture = [textureId unsignedIntValue];
     GLboolean loadPixelData = GL_FALSE;
@@ -292,10 +364,19 @@ void CATexImage2DCGImage(CGImageRef image) {
         glBindTexture(GL_TEXTURE_2D, texture);
     }
 
+    id contents = layer.contents;
     if (loadPixelData) {
-        CGImageRef image = (CGImageRef)layer.contents;
-
-        CATexImage2DCGImage(image);
+        if ([contents isKindOfClass: [O2Image class]])
+            CATexImage2DCGImage((CGImageRef) contents);
+        else if (contents && !CATexImageIOSurface(contents)) {
+            static int nskip = 0;
+            if (nskip < 8) {
+                fprintf(stderr, "CARenderer skip contents class=%s\n",
+                        class_getName([contents class]));
+                fflush(stderr);
+                nskip++;
+            }
+        }
 
         GLint minFilter = interpolationFromName(layer.minificationFilter);
         GLint magFilter = interpolationFromName(layer.magnificationFilter);
@@ -305,6 +386,22 @@ void CATexImage2DCGImage(CGImageRef image) {
 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    } else if ([contents isKindOfClass: [O2Image class]]) {
+        /* Keep presenting CPU pixels even after the GL texture exists. */
+        CGImageRef image = (CGImageRef) contents;
+        CGDataProviderRef provider = CGImageGetDataProvider(image);
+        CFDataRef data = provider ? CGDataProviderCopyData(provider) : NULL;
+        if (data) {
+            const uint8_t *pixelBytes = CFDataGetBytePtr(data);
+            if (pixelBytes)
+                CGLPutBGRAOnDrawable(CGLGetCurrentContext(), pixelBytes,
+                                     (int) CGImageGetWidth(image),
+                                     (int) CGImageGetHeight(image),
+                                     (int) (CGImageGetWidth(image) * 4));
+            CFRelease(data);
+        }
+    } else if (contents) {
+        CATexImageIOSurface(contents);
     }
 
     CGPoint anchorPoint =

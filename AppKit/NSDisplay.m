@@ -21,6 +21,146 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 #import <AppKit/NSErrors.h>
 #import <AppKit/NSRaise.h>
 #import <AppKit/NSColorList.h>
+#import <objc/runtime.h>
+#import <dlfcn.h>
+#import <stdio.h>
+#import <stdlib.h>
+#import <string.h>
+
+__attribute__((used)) static const char nsdisplay_backend_principal_v2[] = "nsdisplay_backend_principal_v2";
+
+static NSString *NSDisplayPrincipalNameFromBackendBundle(NSBundle *backendBundle)
+{
+    NSString *principalName =
+            [backendBundle objectForInfoDictionaryKey: @"NSPrincipalClass"];
+    if (principalName == nil) {
+        principalName = [[backendBundle infoDictionary]
+                objectForKey: @"NSPrincipalClass"];
+    }
+    if (principalName == nil) {
+        /* Overlayfs readdir can hide Contents/Info.plist from CFBundle while
+         * the file itself is still there. Read it the version-2 way. */
+        NSString *plistPath = [[backendBundle bundlePath]
+                stringByAppendingPathComponent: @"Contents/Info.plist"];
+        NSDictionary *plist =
+                [NSDictionary dictionaryWithContentsOfFile: plistPath];
+        principalName = [plist objectForKey: @"NSPrincipalClass"];
+        fprintf(stderr,
+                "nsdisplay_backend_principal_v2 Contents/Info.plist=%s "
+                "NSPrincipalClass=%s\n",
+                [plistPath UTF8String],
+                principalName ? [principalName UTF8String] : "(null)");
+        fflush(stderr);
+    }
+    if (principalName == nil) {
+        NSString *path = [backendBundle bundlePath];
+        if ([path rangeOfString: @"X11.backend"].location != NSNotFound) {
+            principalName = @"X11Display";
+            fprintf(stderr, "nsdisplay_backend_principal_v2 default X11Display\n");
+            fflush(stderr);
+        }
+    }
+    return principalName;
+}
+
+static Class NSDisplayLookupClassNamed(NSString *principalName, const char *execPath)
+{
+    if (principalName == nil) {
+        return Nil;
+    }
+
+    Class cls = NSClassFromString(principalName);
+    fprintf(stderr, "nsdisplay_backend_principal_v2 NSClassFromString(%s)=%p\n",
+            [principalName UTF8String], cls);
+    fflush(stderr);
+    if (cls != Nil) {
+        return cls;
+    }
+
+    if (execPath) {
+        void *handle = dlopen(execPath, RTLD_NOW | RTLD_GLOBAL);
+        cls = NSClassFromString(principalName);
+        fprintf(stderr,
+                "nsdisplay_backend_principal_v2 NSClassFromString(%s)=%p after "
+                "RTLD_GLOBAL handle=%p\n",
+                [principalName UTF8String], cls, handle);
+        fflush(stderr);
+        if (cls != Nil) {
+            return cls;
+        }
+        NSString *symbol =
+                [@"OBJC_CLASS_$_" stringByAppendingString: principalName];
+        cls = (Class) dlsym(handle ? handle : RTLD_DEFAULT, [symbol UTF8String]);
+        fprintf(stderr, "nsdisplay_backend_principal_v2 dlsym(%s)=%p\n",
+                [symbol UTF8String], cls);
+        fflush(stderr);
+    }
+    return cls;
+}
+
+static Class NSDisplayClassFromBackendBundle(NSBundle *backendBundle)
+{
+    NSString *principalName =
+            NSDisplayPrincipalNameFromBackendBundle(backendBundle);
+    const char *execPath =
+            [[backendBundle executablePath] fileSystemRepresentation];
+    Class cls = [backendBundle principalClass];
+
+    fprintf(stderr,
+            "nsdisplay_backend_principal_v2 bundle=%s loaded=%d principalName=%s "
+            "principalClass=%p exec=%s\n",
+            [[backendBundle bundlePath] UTF8String],
+            (int) [backendBundle isLoaded],
+            principalName ? [principalName UTF8String] : "(null)", cls,
+            execPath ? execPath : "(null)");
+    fflush(stderr);
+
+    if (cls != Nil) {
+        return cls;
+    }
+
+    cls = NSDisplayLookupClassNamed(principalName, execPath);
+    if (cls != Nil) {
+        return cls;
+    }
+
+    if (execPath) {
+        unsigned int count = 0;
+        const char **names = objc_copyClassNamesForImage(execPath, &count);
+        fprintf(stderr, "nsdisplay_backend_principal_v2 image classes=%u\n",
+                count);
+        fflush(stderr);
+        if (names != NULL) {
+            for (unsigned int i = 0; i < count; i++) {
+                Class c = objc_lookUpClass(names[i]);
+                if (c == Nil) {
+                    c = objc_getClass(names[i]);
+                }
+                BOOL isDisplaySubclass =
+                        (c != Nil && c != [NSDisplay class] &&
+                         [c isSubclassOfClass: [NSDisplay class]]);
+                fprintf(stderr,
+                        "nsdisplay_backend_principal_v2 class[%u]=%s ptr=%p "
+                        "subclass=%d\n",
+                        i, names[i], c, (int) isDisplaySubclass);
+                fflush(stderr);
+                if (principalName != nil &&
+                    strcmp(names[i], [principalName UTF8String]) == 0 &&
+                    c != Nil) {
+                    cls = c;
+                    break;
+                }
+                if (isDisplaySubclass) {
+                    cls = c;
+                    break;
+                }
+            }
+            free((void *) names);
+        }
+    }
+
+    return cls;
+}
 
 @implementation NSDisplay
 
@@ -75,7 +215,18 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 
     // Try to instantiate them in that order.
     for (NSBundle *backendBundle in backends) {
-        NSDisplay *display = [[[backendBundle principalClass] alloc] init];
+        Class cls = NSDisplayClassFromBackendBundle(backendBundle);
+        if (cls == Nil) {
+            fprintf(stderr,
+                    "nsdisplay_backend_principal_v2 skip %s: no principal class\n",
+                    [[backendBundle bundlePath] UTF8String]);
+            fflush(stderr);
+            continue;
+        }
+        NSDisplay *display = [[cls alloc] init];
+        fprintf(stderr, "nsdisplay_backend_principal_v2 [[%s alloc] init]=%p\n",
+                class_getName(cls), display);
+        fflush(stderr);
         if (display != nil) {
             // The first one to initialize successfully becomes the
             // one that we're going to use.

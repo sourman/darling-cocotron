@@ -154,6 +154,8 @@ BOOL O2ColorSpaceIsPlatformRGB(O2ColorSpaceRef self) {
 }
 
 size_t O2ColorSpaceGetNumberOfComponents(O2ColorSpaceRef self) {
+    if (self == NULL)
+        return 3;
     switch (self->_type) {
 
     case kO2ColorSpaceModelMonochrome:
@@ -177,7 +179,7 @@ size_t O2ColorSpaceGetNumberOfComponents(O2ColorSpaceRef self) {
 }
 
 O2ColorSpaceModel O2ColorSpaceGetModel(O2ColorSpaceRef self) {
-    return self->_type;
+    return self ? self->_type : kO2ColorSpaceModelRGB;
 }
 
 - (BOOL) isEqualToColorSpace: (O2ColorSpaceRef) other {

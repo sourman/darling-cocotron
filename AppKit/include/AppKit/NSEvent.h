@@ -212,6 +212,13 @@ enum { NSApplicationActivated = 0, NSApplicationDeactivated = 1 };
 
 + (NSPoint) mouseLocation;
 + (NSEventModifierFlags) modifierFlags;
++ (NSUInteger) pressedMouseButtons;
+
++ (id) addGlobalMonitorForEventsMatchingMask: (NSEventMask) mask
+                                     handler: (void (^)(NSEvent *event)) block;
++ (id) addLocalMonitorForEventsMatchingMask: (NSEventMask) mask
+                                    handler: (NSEvent * (^)(NSEvent *event)) block;
++ (void) removeMonitor: (id) eventMonitor;
 
 - (instancetype) initWithType: (NSEventType) type
                      location: (NSPoint) location
@@ -286,6 +293,12 @@ enum { NSApplicationActivated = 0, NSApplicationDeactivated = 1 };
 - (CGFloat) deltaX;
 - (CGFloat) deltaY;
 - (CGFloat) deltaZ;
+- (CGFloat) scrollingDeltaX;
+- (CGFloat) scrollingDeltaY;
+- (BOOL) hasPreciseScrollingDeltas;
+- (NSInteger) phase;
+- (NSInteger) momentumPhase;
+- (BOOL) isDirectionInvertedFromDevice;
 
 - (NSString *) characters;
 - (NSString *) charactersIgnoringModifiers;

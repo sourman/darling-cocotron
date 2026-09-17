@@ -46,6 +46,9 @@ CGColorCreateWithPattern(CGColorSpaceRef colorSpace, CGPatternRef pattern,
 COREGRAPHICS_EXPORT CGColorRef CGColorCreateCopy(CGColorRef self);
 COREGRAPHICS_EXPORT CGColorRef CGColorCreateCopyWithAlpha(CGColorRef self,
                                                           CGFloat a);
+COREGRAPHICS_EXPORT CGColorRef CGColorCreateCopyByMatchingToColorSpace(
+        CGColorSpaceRef space, CGColorRenderingIntent intent, CGColorRef color,
+        CFDictionaryRef options);
 
 COREGRAPHICS_EXPORT bool CGColorEqualToColor(CGColorRef self, CGColorRef other);
 

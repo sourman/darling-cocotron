@@ -74,6 +74,16 @@ const NSViewFullScreenModeOptionKey NSFullScreenModeApplicationPresentationOptio
 @synthesize translatesAutoresizingMaskIntoConstraints = _translatesAutoresizingMaskIntoConstraints;
 @synthesize appearance = _appearance;
 
+- (NSAppearance *) effectiveAppearance {
+    if (_appearance != nil)
+        return _appearance;
+    if (_superview != nil)
+        return [_superview effectiveAppearance];
+    if (_window != nil)
+        return [_window effectiveAppearance];
+    return [NSAppearance currentDrawingAppearance];
+}
+
 static BOOL NSViewLayersEnabled = YES;
 static BOOL NSShowAllViews = NO;
 

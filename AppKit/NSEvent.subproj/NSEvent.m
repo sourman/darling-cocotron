@@ -40,6 +40,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
     return [[NSDisplay currentDisplay] currentModifierFlags];
 }
 
++ (NSUInteger) pressedMouseButtons {
+    return 0;
+}
+
 - (instancetype) initWithType: (NSEventType) type
                      location: (NSPoint) location
                 modifierFlags: (NSEventModifierFlags) modifierFlags
@@ -228,6 +232,30 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
     return 0;
 }
 
+- (CGFloat) scrollingDeltaX {
+    return [self deltaX];
+}
+
+- (CGFloat) scrollingDeltaY {
+    return [self deltaY];
+}
+
+- (BOOL) hasPreciseScrollingDeltas {
+    return NO;
+}
+
+- (NSInteger) phase {
+    return 0;
+}
+
+- (NSInteger) momentumPhase {
+    return 0;
+}
+
+- (BOOL) isDirectionInvertedFromDevice {
+    return NO;
+}
+
 - (NSString *) characters {
     return nil;
 }
@@ -349,15 +377,19 @@ static NSTimer *_periodicTimer = nil;
     return 0;
 }
 
++ (id) addGlobalMonitorForEventsMatchingMask: (NSEventMask) mask
+                                     handler: (void (^)(NSEvent *event)) block
+{
+    return nil;
+}
+
 + (id) addLocalMonitorForEventsMatchingMask: (NSEventMask) mask
                                     handler: (NSEvent * (^)(NSEvent *event)) block
 {
-    NSUnimplementedMethod();
     return nil;
 }
 
 + (void) removeMonitor: (id) eventMonitor {
-    NSUnimplementedMethod();
 }
 
 @end

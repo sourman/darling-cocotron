@@ -14,10 +14,24 @@
  GNU General Public License for more details.
 
  You should have received a copy of the GNU General Public License
- along with Darling.  If not, see <http://www.gnu.org/licenses/>.
+ along with Darling.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 #import <Foundation/Foundation.h>
 
 @interface NSAccessibilityRemoteUIElement : NSObject
+
++ (BOOL)isRemoteUIApp;
++ (void)setRemoteUIApp:(BOOL)flag;
++ (NSData *)remoteTokenForLocalUIElement:(id)localUIElement;
++ (void)registerRemoteUIProcessIdentifier:(pid_t)pid;
++ (void)unregisterRemoteUIProcessIdentifier:(pid_t)pid;
+
+- (id)initWithRemoteToken:(NSData *)remoteToken;
+- (pid_t)processIdentifier;
+- (void)accessibilitySetPresenterProcessIdentifier:(pid_t)presenterPID;
+
+@property (retain) id windowUIElement;
+@property (retain) id topLevelUIElement;
+
 @end

@@ -18,8 +18,11 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 
+#import <AppKit/NSAppearance.h>
 #import <AppKit/NSApplication.h>
 #import <AppKit/NSColor.h>
+#import <objc/runtime.h>
+#import <Foundation/NSNumber.h>
 #import <AppKit/NSCursor.h>
 #import <AppKit/NSDisplay.h>
 #import <AppKit/NSDraggingManager.h>
@@ -45,6 +48,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 #import <AppKit/NSWindowAnimationContext.h>
 #import <ApplicationServices/ApplicationServices.h>
 #import <CoreGraphics/CGWindow.h>
+#import <stdio.h>
 
 const NSNotificationName NSWindowDidBecomeKeyNotification =
         @"NSWindowDidBecomeKeyNotification";
@@ -204,10 +208,30 @@ NSInteger NSBitsPerPixelFromDepth(NSWindowDepth depth) {
 
 @end
 
+static const void *NSWindowAppearanceKey = &NSWindowAppearanceKey;
+
 @implementation NSWindow
 
 @synthesize identifier = _identifier;
 @synthesize accessibilityElement = _isAccessible;
+
+- (NSAppearance *) appearance {
+    return objc_getAssociatedObject(self, NSWindowAppearanceKey);
+}
+
+- (void) setAppearance: (NSAppearance *) appearance {
+    objc_setAssociatedObject(self, NSWindowAppearanceKey, appearance,
+                             OBJC_ASSOCIATION_RETAIN);
+}
+
+- (NSAppearance *) effectiveAppearance {
+    NSAppearance *appearance = [self appearance];
+    if (appearance != nil)
+        return appearance;
+    if (NSApp != nil)
+        return [NSApp effectiveAppearance];
+    return [NSAppearance currentDrawingAppearance];
+}
 
 static BOOL _allowsAutomaticWindowTabbing;
 
@@ -377,6 +401,13 @@ static BOOL _allowsAutomaticWindowTabbing;
     if (!(_styleMask & NSAppKitPrivateWindow)) {
         [[NSApplication sharedApplication] _addWindow: self];
     }
+    fprintf(stderr,
+            "nsapp_chrome_window_v1 NSWindow init %s self=%p "
+            "frame={{%.0f,%.0f},{%.0f,%.0f}} style=0x%lx defer=%d\n",
+            class_getName([self class]), self, _frame.origin.x, _frame.origin.y,
+            _frame.size.width, _frame.size.height, (unsigned long) _styleMask,
+            (int) defer);
+    fflush(stderr);
     return self;
 }
 
@@ -444,6 +475,11 @@ static BOOL _allowsAutomaticWindowTabbing;
 - (void) _createPlatformWindowOnMainThread {
     if (_platformWindow != nil)
         return;
+    fprintf(stderr,
+            "nsapp_chrome_window_v1 _createPlatformWindowOnMainThread self=%p "
+            "class=%s\n",
+            self, class_getName([self class]));
+    fflush(stderr);
     _platformWindow = [[NSDisplay currentDisplay] newWindowWithDelegate: self];
 
     [self _updatePlatformWindowTitle];
@@ -1253,8 +1289,12 @@ static BOOL _allowsAutomaticWindowTabbing;
     //   NSUnimplementedMethod();
 }
 
+static const void *kCometCollectionBehavior;
+
 - (void) setCollectionBehavior: (NSWindowCollectionBehavior) behavior {
-    NSUnimplementedMethod();
+    objc_setAssociatedObject(self, &kCometCollectionBehavior,
+                             [NSNumber numberWithUnsignedInteger: behavior],
+                             OBJC_ASSOCIATION_RETAIN);
 }
 
 - (void) setLevel: (NSInteger) value {
@@ -1405,6 +1445,14 @@ static BOOL _allowsAutomaticWindowTabbing;
     return 1.0;
 }
 
+- (CGFloat) backingScaleFactor {
+    return 1.0;
+}
+
+- (NSUInteger) occlusionState {
+    return 2; /* NSWindowOcclusionStateVisible */
+}
+
 - (NSResponder *) firstResponder {
     if ([_firstResponder isKindOfClass: [NSDrawer class]])
         return [_firstResponder nextResponder];
@@ -1473,7 +1521,6 @@ static BOOL _allowsAutomaticWindowTabbing;
 }
 
 - (BOOL) isOnActiveSpace {
-    NSUnimplementedMethod();
     return YES;
 }
 
@@ -1539,8 +1586,9 @@ static BOOL _allowsAutomaticWindowTabbing;
 }
 
 - (NSWindowCollectionBehavior) collectionBehavior {
-    NSUnimplementedMethod();
-    return 0;
+    NSNumber *stored =
+            objc_getAssociatedObject(self, &kCometCollectionBehavior);
+    return stored ? [stored unsignedIntegerValue] : 0;
 }
 
 - (NSPoint) convertBaseToScreen: (NSPoint) point {
@@ -2510,6 +2558,11 @@ static BOOL _allowsAutomaticWindowTabbing;
 }
 
 - (void) makeKeyAndOrderFront: (id) sender {
+    fprintf(stderr,
+            "nsapp_chrome_window_v1 makeKeyAndOrderFront self=%p class=%s "
+            "sender=%p visible=%d\n",
+            self, class_getName([self class]), sender, (int) _isVisible);
+    fflush(stderr);
     if ([self isMiniaturized]) {
         [_platformWindow deminiaturize];
     }
@@ -2527,6 +2580,9 @@ static BOOL _allowsAutomaticWindowTabbing;
 }
 
 - (void) setIsVisible: (BOOL) visible {
+    fprintf(stderr, "nsapp_chrome_window_v1 setIsVisible:%d self=%p was=%d\n",
+            (int) visible, self, (int) _isVisible);
+    fflush(stderr);
     if (_isVisible == visible) {
         return;
     }
@@ -2539,6 +2595,9 @@ static BOOL _allowsAutomaticWindowTabbing;
 }
 
 - (void) orderFront: (id) sender {
+    fprintf(stderr, "nsapp_chrome_window_v1 orderFront self=%p class=%s\n",
+            self, class_getName([self class]));
+    fflush(stderr);
     [self orderWindow: NSWindowAbove relativeTo: 0];
 }
 
@@ -3474,8 +3533,23 @@ static BOOL _allowsAutomaticWindowTabbing;
 
 @implementation NSWindow (Darling)
 
+- (void) doesNotRecognizeSelector: (SEL) aSelector {
+    fprintf(stderr,
+            "nsapp_chrome_window_v1 NSWindow doesNotRecognizeSelector %s "
+            "self=%p class=%s\n",
+            sel_getName(aSelector), self, class_getName([self class]));
+    fflush(stderr);
+    [super doesNotRecognizeSelector: aSelector];
+}
+
 - (CGWindow *) platformWindow {
     if (_platformWindow == nil) {
+        fprintf(stderr,
+                "nsapp_chrome_window_v1 platformWindow lazy self=%p class=%s "
+                "mainThread=%d\n",
+                self, class_getName([self class]),
+                (int) [NSThread isMainThread]);
+        fflush(stderr);
         [self performSelectorOnMainThread: @selector
                 (_createPlatformWindowOnMainThread)
                                withObject: nil
