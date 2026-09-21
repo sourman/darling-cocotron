@@ -106,6 +106,7 @@ void *_NSYankFromKillRing(void)
 #import <AppKit/NSBitmapImageRep.h>
 #import <AppKit/NSGraphics.h>
 #import <AppKit/NSGraphicsContext.h>
+#import <stdio.h>
 
 const char comet_startup_cluster_stubs_v1[] = "comet_startup_cluster_stubs_v1";
 const char comet_nsimage_cluster_v1[] = "comet_nsimage_cluster_v1";
@@ -185,6 +186,27 @@ static CometEdgeInsets _cometZeroInsets(void)
 - (void)setClipsToBounds:(BOOL)flag
 {
 	(void) flag;
+}
+- (NSPoint)convertPointFromScreen:(NSPoint)point
+{
+	NSWindow *window = [self window];
+	fprintf(stderr,
+	        "nsapp_chrome_window_v1 NSView convertPointFromScreen self=%p "
+	        "window=%p in=(%.1f,%.1f)\n",
+	        self, window, point.x, point.y);
+	fflush(stderr);
+	if (window)
+		return [self convertPoint: [window convertPointFromScreen: point]
+		                 fromView: nil];
+	return point;
+}
+- (NSPoint)convertPointToScreen:(NSPoint)point
+{
+	NSWindow *window = [self window];
+	if (window)
+		return [window convertPointToScreen: [self convertPoint: point
+		                                               toView: nil]];
+	return point;
 }
 @end
 
@@ -326,7 +348,17 @@ static const void *kMovableByBackground;
 - (NSPoint)convertPointFromScreen:(NSPoint)point
 {
 	NSRect frame = [self frame];
-	return NSMakePoint(point.x - frame.origin.x, point.y - frame.origin.y);
+	NSPoint out = NSMakePoint(point.x - frame.origin.x,
+	                          point.y - frame.origin.y);
+	fprintf(stderr,
+	        "nsapp_chrome_window_v1 convertPointFromScreen self=%p "
+	        "class=%s in=(%.1f,%.1f) frame=(%.1f,%.1f,%.1f,%.1f) "
+	        "out=(%.1f,%.1f)\n",
+	        self, class_getName([self class]), point.x, point.y,
+	        frame.origin.x, frame.origin.y, frame.size.width,
+	        frame.size.height, out.x, out.y);
+	fflush(stderr);
+	return out;
 }
 - (NSPoint)convertPointToScreen:(NSPoint)point
 {

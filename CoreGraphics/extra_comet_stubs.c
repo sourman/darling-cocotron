@@ -41,11 +41,8 @@ CFDictionaryRef CGSessionCopyCurrentDictionary(void)
 
 /* Real implementation lives in CGColor.m (cgcolor_match_srgb_v1). */
 void *CGColorGetTypeID(void) { return 0; }
-void *CGColorSpaceCopyICCData(void) { return 0; }
-void *CGColorSpaceCopyName(void) { return 0; }
 void *CGColorSpaceCreateICCBased(void) { return 0; }
 void *CGDirectDisplayCopyCurrentMetalDevice(void) { return 0; }
-void *CGDisplayCopyColorSpace(void) { return 0; }
 void *CGDisplayCreateImage(void) { return 0; }
 void *CGDisplayIsBuiltin(void) { return 0; }
 void *CGDisplayRotation(void) { return 0; }

@@ -32,6 +32,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 #import <AppKit/NSWindow-Private.h>
 #import <AppKit/NSApplication.h>
 #import <Foundation/NSDictionary.h>
+#import <stdio.h>
+
+__attribute__((used)) const char nsalert_modal_log_v1[] = "nsalert_modal_log_v1";
+
+#define NSALERT_MODAL_LOG(fmt, ...)                                            \
+    do {                                                                       \
+        fprintf(stderr, "nsalert_modal_log_v1 " fmt "\n", ##__VA_ARGS__);      \
+        fflush(stderr);                                                        \
+    } while (0)
 
 @interface _NSAlertCompletionHandler : NSObject {
     void (^completionHandler)(NSModalResponse returnCode);
@@ -599,7 +608,18 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
     [_window setStyleMask: NSTitledWindowMask];
     [self layoutIfNeeded];
     [_window setDefaultButtonCell: [[_buttons objectAtIndex: 0] cell]];
-    return [NSApp runModalForWindow: _window];
+    NSALERT_MODAL_LOG(
+            "runModal msg='%s' info='%s' buttons=%lu window=%p",
+            [_messageText UTF8String] ?: "",
+            [_informativeText UTF8String] ?: "",
+            (unsigned long) [_buttons count], _window);
+    /* macOS nests [NSApp runModalForWindow:] here. Returning a fake 1000
+       without pumping made Chrome ImmediateCrash (movl $0,0x0) on the
+       next instruction. nextEventMatchingMask waits on the X11 fd so
+       NSModalPanelRunLoopMode does not busy-spin. */
+    NSModalResponse code = [NSApp runModalForWindow: _window];
+    NSALERT_MODAL_LOG("runModal nested pump return=%ld", (long) code);
+    return code;
 }
 
 - (void) _alertButton: sender {

@@ -24,10 +24,24 @@
 #import <Metal/MTLDeviceInternal.h>
 #import <QuartzCore/CALayerContext.h>
 #import <Metal/stubs.h>
+#import <objc/runtime.h>
 
 #include <algorithm>
+#include <stdio.h>
 
 #import "CALayerInternal.h"
+
+__attribute__((used)) const char cametal_stub_v1[] = "cametal_stub_v1";
+
+static void cametal_stub_log(id self, const char *what)
+{
+    static int n;
+    if (n < 48) {
+        fprintf(stderr, "cametal_stub_v1 %s self=%p class=%s n=%d\n",
+                what, self, object_getClassName(self), ++n);
+        fflush(stderr);
+    }
+}
 
 static void reportGLErrors(void) {
 #if 0
@@ -59,147 +73,178 @@ static void reportGLErrors(void) {
 }
 #endif
 
+/*
+  Metal is not built (ENABLE_METAL=AUTO, no Vulkan). Chrome still
+  allocates CAMetalLayer during NativeWidget / renderer spawn and
+  previously died on NSInvalidAbstractInvocation (uncaught NSException
+  with no libc++abi reason). Store properties; nextDrawable is nil so
+  CGL/CARenderer present stays on the software path.
+ */
+static char kCAMDevice, kCAMPix, kCAMCS, kCAMFB, kCAMSize, kCAMPWT;
+static char kCAMDSE, kCAMEDR, kCAMEDRM, kCAMMax, kCAMTO, kCAMHUD;
+
 - (id<MTLDevice>)device
 {
-	NSInvalidAbstractInvocation();
-	return nil;
+	cametal_stub_log(self, "device");
+	return objc_getAssociatedObject(self, &kCAMDevice);
 }
 
 - (void)setDevice: (id<MTLDevice>)device
 {
-	NSInvalidAbstractInvocation();
+	cametal_stub_log(self, "setDevice");
+	objc_setAssociatedObject(self, &kCAMDevice, device, OBJC_ASSOCIATION_RETAIN);
 }
 
 - (id<MTLDevice>)preferredDevice
 {
-	NSInvalidAbstractInvocation();
-	return nil;
+	cametal_stub_log(self, "preferredDevice");
+	return MTLCreateSystemDefaultDevice();
 }
 
 - (MTLPixelFormat)pixelFormat
 {
-	NSInvalidAbstractInvocation();
-	return MTLPixelFormatInvalid;
+	NSNumber *n = objc_getAssociatedObject(self, &kCAMPix);
+	return n ? (MTLPixelFormat)[n unsignedIntegerValue] : MTLPixelFormatBGRA8Unorm;
 }
 
 - (void)setPixelFormat: (MTLPixelFormat)pixelFormat
 {
-	NSInvalidAbstractInvocation();
+	cametal_stub_log(self, "setPixelFormat");
+	objc_setAssociatedObject(self, &kCAMPix,
+	                         [NSNumber numberWithUnsignedInteger: pixelFormat],
+	                         OBJC_ASSOCIATION_RETAIN);
 }
 
 - (CGColorSpaceRef)colorspace
 {
-	NSInvalidAbstractInvocation();
-	return NULL;
+	return (CGColorSpaceRef)objc_getAssociatedObject(self, &kCAMCS);
 }
 
 - (void)setColorspace: (CGColorSpaceRef)colorspace
 {
-	NSInvalidAbstractInvocation();
+	objc_setAssociatedObject(self, &kCAMCS, (id)colorspace, OBJC_ASSOCIATION_RETAIN);
 }
 
 - (BOOL)framebufferOnly
 {
-	NSInvalidAbstractInvocation();
-	return YES;
+	NSNumber *n = objc_getAssociatedObject(self, &kCAMFB);
+	return n ? [n boolValue] : YES;
 }
 
 - (void)setFramebufferOnly: (BOOL)framebufferOnly
 {
-	NSInvalidAbstractInvocation();
+	objc_setAssociatedObject(self, &kCAMFB,
+	                         [NSNumber numberWithBool: framebufferOnly],
+	                         OBJC_ASSOCIATION_RETAIN);
 }
 
 - (CGSize)drawableSize
 {
-	NSInvalidAbstractInvocation();
-	return CGSizeZero;
+	NSValue *v = objc_getAssociatedObject(self, &kCAMSize);
+	return v ? [v sizeValue] : _bounds.size;
 }
 
 - (void)setDrawableSize: (CGSize)drawableSize
 {
-	NSInvalidAbstractInvocation();
+	cametal_stub_log(self, "setDrawableSize");
+	objc_setAssociatedObject(self, &kCAMSize,
+	                         [NSValue valueWithSize: drawableSize],
+	                         OBJC_ASSOCIATION_RETAIN);
 }
 
 - (BOOL)presentsWithTransaction
 {
-	NSInvalidAbstractInvocation();
-	return NO;
+	NSNumber *n = objc_getAssociatedObject(self, &kCAMPWT);
+	return n ? [n boolValue] : NO;
 }
 
 - (void)setPresentsWithTransaction: (BOOL)presentsWithTransaction
 {
-	NSInvalidAbstractInvocation();
+	objc_setAssociatedObject(self, &kCAMPWT,
+	                         [NSNumber numberWithBool: presentsWithTransaction],
+	                         OBJC_ASSOCIATION_RETAIN);
 }
 
 - (BOOL)displaySyncEnabled
 {
-	NSInvalidAbstractInvocation();
-	return NO;
+	NSNumber *n = objc_getAssociatedObject(self, &kCAMDSE);
+	return n ? [n boolValue] : YES;
 }
 
 - (void)setDisplaySyncEnabled: (BOOL)displaySyncEnabled
 {
-	NSInvalidAbstractInvocation();
+	objc_setAssociatedObject(self, &kCAMDSE,
+	                         [NSNumber numberWithBool: displaySyncEnabled],
+	                         OBJC_ASSOCIATION_RETAIN);
 }
 
 - (BOOL)wantsExtendedDynamicRangeContent
 {
-	NSInvalidAbstractInvocation();
-	return NO;
+	NSNumber *n = objc_getAssociatedObject(self, &kCAMEDR);
+	return n ? [n boolValue] : NO;
 }
 
 - (void)setWantsExtendedDynamicRangeContent: (BOOL)wantsExtendedDynamicRangeContent
 {
-	NSInvalidAbstractInvocation();
+	objc_setAssociatedObject(self, &kCAMEDR,
+	                         [NSNumber numberWithBool: wantsExtendedDynamicRangeContent],
+	                         OBJC_ASSOCIATION_RETAIN);
 }
 
 - (CAEDRMetadata*)EDRMetadata
 {
-	NSInvalidAbstractInvocation();
-	return nil;
+	return objc_getAssociatedObject(self, &kCAMEDRM);
 }
 
 - (void)setEDRMetadata: (CAEDRMetadata*)EDRMetadata
 {
-	NSInvalidAbstractInvocation();
+	objc_setAssociatedObject(self, &kCAMEDRM, EDRMetadata, OBJC_ASSOCIATION_RETAIN);
 }
 
 - (NSUInteger)maximumDrawableCount
 {
-	NSInvalidAbstractInvocation();
-	return 0;
+	NSNumber *n = objc_getAssociatedObject(self, &kCAMMax);
+	return n ? [n unsignedIntegerValue] : 3;
 }
 
 - (void)setMaximumDrawableCount: (NSUInteger)maximumDrawableCount
 {
-	NSInvalidAbstractInvocation();
+	if (maximumDrawableCount < 2)
+		maximumDrawableCount = 2;
+	if (maximumDrawableCount > 3)
+		maximumDrawableCount = 3;
+	objc_setAssociatedObject(self, &kCAMMax,
+	                         [NSNumber numberWithUnsignedInteger: maximumDrawableCount],
+	                         OBJC_ASSOCIATION_RETAIN);
 }
 
 - (BOOL)allowsNextDrawableTimeout
 {
-	NSInvalidAbstractInvocation();
-	return NO;
+	NSNumber *n = objc_getAssociatedObject(self, &kCAMTO);
+	return n ? [n boolValue] : YES;
 }
 
 - (void)setAllowsNextDrawableTimeout: (BOOL)allowsNextDrawableTimeout
 {
-	NSInvalidAbstractInvocation();
+	objc_setAssociatedObject(self, &kCAMTO,
+	                         [NSNumber numberWithBool: allowsNextDrawableTimeout],
+	                         OBJC_ASSOCIATION_RETAIN);
 }
 
 - (NSDictionary*)developerHUDProperties
 {
-	NSInvalidAbstractInvocation();
-	return nil;
+	return objc_getAssociatedObject(self, &kCAMHUD);
 }
 
 - (void)setDeveloperHUDProperties: (NSDictionary*)developerHUDProperties
 {
-	NSInvalidAbstractInvocation();
+	objc_setAssociatedObject(self, &kCAMHUD, developerHUDProperties,
+	                         OBJC_ASSOCIATION_COPY);
 }
 
 - (id<CAMetalDrawable>)nextDrawable
 {
-	NSInvalidAbstractInvocation();
+	cametal_stub_log(self, "nextDrawable");
 	return nil;
 }
 

@@ -60,8 +60,22 @@ __attribute__((used)) const char nscachedimagerep_no_auto_orderfront_v1[] =
                                             defer: NO];
 
     NSDictionary *entries = @{@"CGContext" : @"Onyx"};
+    fprintf(stderr,
+            "nsapp_chrome_window_v1 NSCachedImageRep addEntries window=%p\n",
+            window);
+    fflush(stderr);
     [[window platformWindow] addEntriesToDeviceDictionary: entries];
+    fprintf(stderr,
+            "nsapp_chrome_window_v1 NSCachedImageRep after addEntries "
+            "window=%p\n",
+            window);
+    fflush(stderr);
     [self initWithWindow: window rect: rect];
+    fprintf(stderr,
+            "nsapp_chrome_window_v1 NSCachedImageRep init done window=%p "
+            "size={%.0f,%.0f}\n",
+            window, size.width, size.height);
+    fflush(stderr);
     [window release];
     return self;
 }

@@ -18,6 +18,7 @@ AN ACTION OF CONTRACT,TORT OR OTHERWISE,ARISING FROM,OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 
 #import "CGConversions.h"
+#import <stdio.h>
 #import <CoreGraphics/CGContext.h>
 #import <Onyx2D/O2Context.h>
 #import <Onyx2D/O2MutablePath.h>
@@ -143,7 +144,13 @@ CGPathRef CGContextCopyPath(CGContextRef context) {
 }
 
 void CGContextSaveGState(CGContextRef context) {
+    fprintf(stderr, "lockfocus_savegstate_v1 CGContextSaveGState enter ctx=%p\n",
+            context);
+    fflush(stderr);
     O2ContextSaveGState((O2ContextRef)context);
+    fprintf(stderr, "lockfocus_savegstate_v1 CGContextSaveGState done ctx=%p\n",
+            context);
+    fflush(stderr);
 }
 
 void CGContextRestoreGState(CGContextRef context) {

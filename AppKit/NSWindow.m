@@ -337,6 +337,13 @@ static BOOL _allowsAutomaticWindowTabbing;
                              backing: (NSBackingStoreType) backing
                                defer: (BOOL) defer
 {
+    fprintf(stderr,
+            "nsapp_chrome_window_v1 NSWindow init BEGIN %s "
+            "content={{%.0f,%.0f},{%.0f,%.0f}} style=0x%lx defer=%d\n",
+            class_getName([self class]), contentRect.origin.x,
+            contentRect.origin.y, contentRect.size.width,
+            contentRect.size.height, (unsigned long) styleMask, (int) defer);
+    fflush(stderr);
     // Make sure NSApplication is initialized.
     if (!NSApp) {
         [NSApplication sharedApplication];
@@ -346,7 +353,11 @@ static BOOL _allowsAutomaticWindowTabbing;
     _isDeferred = defer;
 
     _frame = [self frameRectForContentRect: contentRect];
+    fprintf(stderr, "nsapp_chrome_window_v1 NSWindow init after frameRect\n");
+    fflush(stderr);
     _frame = [self constrainFrameRect: _frame toScreen: [NSScreen mainScreen]];
+    fprintf(stderr, "nsapp_chrome_window_v1 NSWindow init after constrain\n");
+    fflush(stderr);
     _savedFrame = _frame;
 
     _level = NSNormalWindowLevel;
@@ -356,6 +367,8 @@ static BOOL _allowsAutomaticWindowTabbing;
     _title = @"";
     _miniwindowTitle = @"";
     _backgroundColor = [[NSColor windowBackgroundColor] copy];
+    fprintf(stderr, "nsapp_chrome_window_v1 NSWindow init after bgColor\n");
+    fflush(stderr);
     _firstResponder = self;
     _makeSureIsOnAScreen = YES;
     _releaseWhenClosed = YES;
@@ -369,6 +382,8 @@ static BOOL _allowsAutomaticWindowTabbing;
     NSRect backgroundFrame = {NSZeroPoint, _frame.size};
     _backgroundView = [[[[self class] frameViewClassForStyleMask: styleMask]
             alloc] initWithFrame: backgroundFrame];
+    fprintf(stderr, "nsapp_chrome_window_v1 NSWindow init after themeFrame\n");
+    fflush(stderr);
     [_backgroundView setAutoresizesSubviews: YES];
     [_backgroundView
             setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
@@ -481,10 +496,22 @@ static BOOL _allowsAutomaticWindowTabbing;
             self, class_getName([self class]));
     fflush(stderr);
     _platformWindow = [[NSDisplay currentDisplay] newWindowWithDelegate: self];
+    fprintf(stderr,
+            "nsapp_chrome_window_v1 after newWindowWithDelegate self=%p "
+            "pw=%p\n",
+            self, _platformWindow);
+    fflush(stderr);
 
     [self _updatePlatformWindowTitle];
+    fprintf(stderr, "nsapp_chrome_window_v1 after setTitle self=%p\n", self);
+    fflush(stderr);
 
     [[NSDraggingManager draggingManager] registerWindow: self dragTypes: nil];
+    fprintf(stderr,
+            "nsapp_chrome_window_v1 _createPlatformWindowOnMainThread done "
+            "self=%p class=%s\n",
+            self, class_getName([self class]));
+    fflush(stderr);
 }
 
 - (CGContextRef) cgContext {

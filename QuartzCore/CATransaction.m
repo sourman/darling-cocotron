@@ -5,6 +5,7 @@
 #import <Foundation/NSRunLoop.h>
 #import <QuartzCore/CALayerContext.h>
 #import <QuartzCore/CATransaction.h>
+#import <objc/runtime.h>
 #import <stdio.h>
 
 NSString *const kCATransactionAnimationDuration =
@@ -105,14 +106,36 @@ static CATransactionGroup *createImplicitTransactionGroupIfNeeded() {
 
 + (void) commit {
     CATransactionGroup *group = currentTransactionGroup();
-    [group runCommitHandlers];
+    @try {
+        [group runCommitHandlers];
+    } @catch (id e) {
+        const char *r = "";
+        if ([e respondsToSelector: @selector(reason)]) {
+            NSString *rs = [e reason];
+            r = rs ? [rs UTF8String] : "(nil)";
+        }
+        fprintf(stderr, "nsexc_v1 CATransaction commit class=%s reason=%s\n",
+                object_getClassName(e), r);
+        fflush(stderr);
+    }
     [transactionStack() removeLastObject];
 }
 
 + (void) flush {
     fprintf(stderr, "CATransaction flush presentAll\n");
     fflush(stderr);
-    [CALayerContext presentAll];
+    @try {
+        [CALayerContext presentAll];
+    } @catch (id e) {
+        const char *r = "";
+        if ([e respondsToSelector: @selector(reason)]) {
+            NSString *rs = [e reason];
+            r = rs ? [rs UTF8String] : "(nil)";
+        }
+        fprintf(stderr, "nsexc_v1 CATransaction flush class=%s reason=%s\n",
+                object_getClassName(e), r);
+        fflush(stderr);
+    }
 }
 
 + (void) addCommitHandler: (void (^)(void)) block forPhase: (NSInteger) phase {

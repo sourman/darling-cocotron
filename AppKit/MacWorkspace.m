@@ -4,7 +4,46 @@
 #import <AppKit/NSGraphics.h>
 #import <AppKit/NSImage.h>
 #import <AppKit/NSRaise.h>
+#import <Foundation/NSDictionary.h>
 #include <LaunchServices/LaunchServices.h>
+#include <dispatch/dispatch.h>
+#include <stdio.h>
+
+__attribute__((used)) const char macworkspace_async_default_v1[] =
+        "macworkspace_async_default_v1";
+
+static NSMutableDictionary *g_schemeAppURLs;
+
+static NSMutableDictionary *schemeAppURLs(void)
+{
+    if (!g_schemeAppURLs)
+        g_schemeAppURLs = [[NSMutableDictionary alloc] init];
+    return g_schemeAppURLs;
+}
+
+static NSString *bundleIdForAppURL(NSURL *applicationURL)
+{
+    NSString *path = [applicationURL path];
+    if (!path)
+        return @"ai.perplexity.comet";
+    NSString *plistPath = [path stringByAppendingPathComponent: @"Contents/Info.plist"];
+    NSDictionary *info = [NSDictionary dictionaryWithContentsOfFile: plistPath];
+    NSString *bid = [info objectForKey: @"CFBundleIdentifier"];
+    if ([bid length])
+        return bid;
+    return @"ai.perplexity.comet";
+}
+
+static void invokeDefaultAppHandlerAsync(void (^completionHandler)(NSError *error))
+{
+    if (!completionHandler)
+        return;
+    void (^handler)(NSError *) = [completionHandler copy];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        handler(nil);
+        [handler release];
+    });
+}
 
 @implementation NSWorkspace (macos)
 
@@ -295,6 +334,55 @@ static NSImage *_macWorkspacePlaceholderIcon(void)
     // [[NSWorkspace sharedWorkspace] URLForApplicationWithBundleIdentifier]
     // Call [self openFile:withApplication:]
     NSUnimplementedMethod();
+}
+
+/*
+  Chrome registers as the default handler for https after NativeWidget
+  present. Missing this selector was the uncaught NSException after
+  iokit_lookup_v1 (GPU/network helpers then Z).
+ */
+- (void) setDefaultApplicationAtURL: (NSURL *) applicationURL
+        toOpenURLsWithScheme: (NSString *) urlScheme
+           completionHandler: (void (^)(NSError *error)) completionHandler
+{
+    NSString *bid = bundleIdForAppURL(applicationURL);
+    fprintf(stderr,
+            "macworkspace_async_default_v1 scheme=%s app=%s bid=%s\n",
+            urlScheme ? [urlScheme UTF8String] : "(nil)",
+            applicationURL ? [[applicationURL absoluteString] UTF8String]
+                           : "(nil)",
+            bid ? [bid UTF8String] : "(nil)");
+    fflush(stderr);
+    if (urlScheme && applicationURL)
+        [schemeAppURLs() setObject: applicationURL forKey: urlScheme];
+    if (urlScheme && bid)
+        LSSetDefaultHandlerForURLScheme((CFStringRef) urlScheme,
+                                        (CFStringRef) bid);
+    invokeDefaultAppHandlerAsync(completionHandler);
+}
+
+- (void) setDefaultApplicationAtURL: (NSURL *) applicationURL
+           toOpenContentType: (id) contentType
+           completionHandler: (void (^)(NSError *error)) completionHandler
+{
+    fprintf(stderr,
+            "macworkspace_async_default_v1 contentType=%s app=%s\n",
+            contentType ? [[contentType description] UTF8String] : "(nil)",
+            applicationURL ? [[applicationURL absoluteString] UTF8String]
+                           : "(nil)");
+    fflush(stderr);
+    invokeDefaultAppHandlerAsync(completionHandler);
+}
+
+- (NSURL *) URLForApplicationToOpenURL: (NSURL *) url
+{
+    NSString *scheme = [url scheme];
+    NSURL *app = scheme ? [schemeAppURLs() objectForKey: scheme] : nil;
+    if (app)
+        return app;
+    if ([scheme isEqualToString: @"comet-external"])
+        return [NSURL fileURLWithPath: @"/Applications/Comet.app"];
+    return nil;
 }
 
 - (NSURL *) URLForApplicationWithBundleIdentifier: (NSString *) bundleIdentifier

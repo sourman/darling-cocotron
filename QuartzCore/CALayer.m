@@ -6,6 +6,9 @@
 #import <QuartzCore/CATransaction.h>
 #import <objc/runtime.h>
 
+__attribute__((used)) const char calayer_insert_sublayer_v1[] =
+        "calayer_insert_sublayer_v1";
+
 NSString *const kCAFilterLinear = @"linear";
 NSString *const kCAFilterNearest = @"nearest";
 NSString *const kCAFilterTrilinear = @"trilinear";
@@ -437,6 +440,37 @@ static const void *kCALayerRasterizationScale;
 
 - (void) addSublayer: (CALayer *) layer {
     [self setSublayers: [_sublayers arrayByAddingObject: layer]];
+}
+
+- (void) insertSublayer: (CALayer *) layer atIndex: (unsigned) index {
+    NSMutableArray *layers;
+    NSUInteger n;
+
+    if (!layer)
+        return;
+    layers = [_sublayers mutableCopy];
+    n = [layers count];
+    if ((NSUInteger) index > n)
+        index = (unsigned) n;
+    [layers insertObject: layer atIndex: (NSUInteger) index];
+    [self setSublayers: layers];
+    [layers release];
+}
+
+- (void) insertSublayer: (CALayer *) layer below: (CALayer *) sibling {
+    NSUInteger index = [_sublayers indexOfObjectIdenticalTo: sibling];
+    if (index == NSNotFound)
+        index = [_sublayers count];
+    [self insertSublayer: layer atIndex: (unsigned) index];
+}
+
+- (void) insertSublayer: (CALayer *) layer above: (CALayer *) sibling {
+    NSUInteger index = [_sublayers indexOfObjectIdenticalTo: sibling];
+    if (index == NSNotFound)
+        index = [_sublayers count];
+    else
+        index++;
+    [self insertSublayer: layer atIndex: (unsigned) index];
 }
 
 - (void) replaceSublayer: (CALayer *) layer with: (CALayer *) other {

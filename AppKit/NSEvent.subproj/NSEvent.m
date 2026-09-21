@@ -41,6 +41,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 }
 
 + (NSUInteger) pressedMouseButtons {
+    fprintf(stderr, "nsapp_chrome_window_v1 pressedMouseButtons -> 0\n");
+    fflush(stderr);
     return 0;
 }
 

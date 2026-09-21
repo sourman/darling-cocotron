@@ -978,36 +978,37 @@ NSImageName const NSImageNameTouchBarVolumeUpTemplate =
         representation = [self _cachedImageRepCreateIfNeeded];
 
         [self lockFocusOnRepresentation: representation];
-        NSRect rect;
-        id uncached = [self _bestUncachedRepresentationForDevice: nil];
-        rect.origin.x = 0;
-        rect.origin.y = 0;
-        rect.size = [self size];
-
-        //    if([self scalesWhenResized])
-        [uncached drawInRect: rect];
-        // drawAtPoint: is not working with NSPDFImageRep
-        // Should probably ditch all the caching stuff anyway as it is
-        // deprecated
-        //   else
-        //   [uncached drawAtPoint:rect.origin];
-
-        [self unlockFocus];
         _cacheIsValid = YES;
+        fprintf(stderr, "nsapp_chrome_window_v1 NSImage lockFocus done\n");
+        fflush(stderr);
+        return;
     }
 
-    if ([representation isKindOfClass: [NSCachedImageRep class]])
+    if ([representation isKindOfClass: [NSCachedImageRep class]]) {
+        fprintf(stderr,
+                "nsapp_chrome_window_v1 NSImage lockFocus cached window=%p\n",
+                [(NSCachedImageRep *) representation window]);
+        fflush(stderr);
         context = [NSGraphicsContext
                 graphicsContextWithWindow: [(NSCachedImageRep *) representation
                                                    window]];
+        fprintf(stderr,
+                "nsapp_chrome_window_v1 NSImage lockFocus context=%p "
+                "port=%p\n",
+                context, [context graphicsPort]);
+        fflush(stderr);
+    }
     else if ([representation isKindOfClass: [NSBitmapImageRep class]])
         context = [NSGraphicsContext
                 graphicsContextWithBitmapImageRep: (NSBitmapImageRep *)
                                                            representation];
 
-    if (context == nil) {
-        [NSException raise: NSInvalidArgumentException
-                    format: @"NSImageRep %@ can not be lockFocus'd"];
+    if (context == nil || [context graphicsPort] == NULL) {
+        fprintf(stderr,
+                "nsapp_chrome_window_v1 NSImage lockFocus done (nil "
+                "context=%p)\n",
+                context);
+        fflush(stderr);
         return;
     }
 
@@ -1015,7 +1016,13 @@ NSImageName const NSImageNameTouchBarVolumeUpTemplate =
     [NSGraphicsContext setCurrentContext: context];
 
     graphicsPort = NSCurrentGraphicsPort();
+    fprintf(stderr,
+            "lockfocus_savegstate_v1 NSImage SaveGState enter port=%p\n",
+            graphicsPort);
+    fflush(stderr);
     CGContextSaveGState(graphicsPort);
+    fprintf(stderr, "lockfocus_savegstate_v1 NSImage SaveGState done\n");
+    fflush(stderr);
     CGContextClipToRect(graphicsPort,
                         NSMakeRect(0, 0, [representation size].width,
                                    [representation size].height));
@@ -1029,6 +1036,8 @@ NSImageName const NSImageNameTouchBarVolumeUpTemplate =
         CGAffineTransform flip = {1, 0, 0, -1, 0, [self size].height};
         CGContextConcatCTM(graphicsPort, flip);
     }
+    fprintf(stderr, "nsapp_chrome_window_v1 NSImage lockFocus done\n");
+    fflush(stderr);
 }
 
 - (void) unlockFocus {
@@ -1036,8 +1045,8 @@ NSImageName const NSImageNameTouchBarVolumeUpTemplate =
     [[[NSGraphicsContext currentContext] focusStack] removeLastObject];
 
     CGContextRef graphicsPort = NSCurrentGraphicsPort();
-
-    CGContextRestoreGState(graphicsPort);
+    if (graphicsPort != NULL)
+        CGContextRestoreGState(graphicsPort);
 
     [NSGraphicsContext restoreGraphicsState];
 }

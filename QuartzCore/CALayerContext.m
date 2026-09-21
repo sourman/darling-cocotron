@@ -9,6 +9,7 @@
 #import "CALayerInternal.h"
 #import <OpenGL/CGLInternal.h>
 #import <OpenGL/gl.h>
+#import <objc/runtime.h>
 #import <stdio.h>
 
 @class CAMetalLayerInternal;
@@ -132,6 +133,7 @@ static void CALayerContextUnregister(CALayerContext *ctx) {
 }
 
 - (void) renderLayer: (CALayer *) layer {
+    @try {
     if (!_glContext || !_cglWindow)
         return;
 
@@ -185,6 +187,16 @@ static void CALayerContextUnregister(CALayerContext *ctx) {
     if (renders < 16) {
         fprintf(stderr, "CALayerContext render+swap frame=%dx%d n=%d\n",
                 (int) width, (int) height, ++renders);
+        fflush(stderr);
+    }
+    } @catch (id e) {
+        const char *r = "";
+        if ([e respondsToSelector: @selector(reason)]) {
+            NSString *rs = [e reason];
+            r = rs ? [rs UTF8String] : "(nil)";
+        }
+        fprintf(stderr, "nsexc_v1 CALayerContext renderLayer class=%s reason=%s\n",
+                object_getClassName(e), r);
         fflush(stderr);
     }
 }

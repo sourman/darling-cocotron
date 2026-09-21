@@ -18,12 +18,15 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 
 #import <Onyx2D/O2BitmapContext.h>
+#import <Onyx2D/O2ClipState.h>
 #import <Onyx2D/O2ColorSpace.h>
 #import <Onyx2D/O2DataProvider.h>
 #import <Onyx2D/O2Exceptions.h>
 #import <Onyx2D/O2GraphicsState.h>
 #import <Onyx2D/O2Image.h>
+#import <Onyx2D/O2MutablePath.h>
 #import <Onyx2D/O2Surface.h>
+#include <stdio.h>
 
 @implementation O2BitmapContext
 
@@ -75,6 +78,71 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 
 - (O2Surface *) surface {
     return _surface;
+}
+
+/*
+  Clip is already recorded on the GState by O2ContextClip* before this
+  is invoked. O2BitmapContext has no rasterizer viewport (that lives on
+  O2Context_builtin); device clip is a no-op, matching O2PDFContext /
+  O2Context_distill. The remaining abstract drawing methods are stubbed
+  so NSImage lockFocus / NativeWidget do not throw O2InvalidAbstractInvocation.
+ */
+- (void) clipToState: (O2ClipState *) clipState {
+    fprintf(stderr,
+            "clipToState_v1 O2BitmapContext clipToState clip=%p surface=%p\n",
+            clipState, _surface);
+    fflush(stderr);
+}
+
+- (void) drawPath: (O2PathDrawingMode) pathMode {
+    fprintf(stderr, "clipToState_v1 O2BitmapContext drawPath mode=%d\n",
+            (int) pathMode);
+    fflush(stderr);
+    O2PathReset(self->_path);
+}
+
+- (void) drawShading: (O2Shading *) shading {
+    fprintf(stderr, "clipToState_v1 O2BitmapContext drawShading shading=%p\n",
+            shading);
+    fflush(stderr);
+}
+
+- (void) drawImage: (O2Image *) image inRect: (O2Rect) rect {
+    fprintf(stderr,
+            "clipToState_v1 O2BitmapContext drawImage image=%p rect=(%.1f,%.1f "
+            "%.1fx%.1f)\n",
+            image, rect.origin.x, rect.origin.y, rect.size.width,
+            rect.size.height);
+    fflush(stderr);
+}
+
+- (void) drawLayer: (O2LayerRef) layer inRect: (O2Rect) rect {
+    fprintf(stderr, "clipToState_v1 O2BitmapContext drawLayer layer=%p\n",
+            layer);
+    fflush(stderr);
+}
+
+- (void) copyBitsInRect: (O2Rect) rect
+                toPoint: (O2Point) point
+                 gState: (int) gState
+{
+    fprintf(stderr, "clipToState_v1 O2BitmapContext copyBitsInRect\n");
+    fflush(stderr);
+}
+
+- (NSData *) captureBitmapInRect: (NSRect) rect {
+    fprintf(stderr, "clipToState_v1 O2BitmapContext captureBitmapInRect\n");
+    fflush(stderr);
+    return nil;
+}
+
+- (void) showGlyphs: (const O2Glyph *) glyphs
+           advances: (const O2Size *) advances
+              count: (NSUInteger) count
+{
+    fprintf(stderr, "clipToState_v1 O2BitmapContext showGlyphs count=%lu\n",
+            (unsigned long) count);
+    fflush(stderr);
 }
 
 O2ContextRef O2BitmapContextCreateWithData(

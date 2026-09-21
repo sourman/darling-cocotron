@@ -55,6 +55,10 @@
 #import <fontconfig/fontconfig.h>
 #import <stddef.h>
 #import <stdio.h>
+#ifdef DARLING
+#import <sys/select.h>
+#import <sys/time.h>
+#endif
 
 void NSColorSetCatalogColor(NSColorListName catalogName, NSColorName colorName, NSColor *color);
 
@@ -146,6 +150,15 @@ static void socketCallback(CFSocketRef s, CFSocketCallBackType type,
         _windowsByID = [NSMutableDictionary new];
         [self _enableDetectableAutoRepeat];
 
+#ifdef DARLING
+        /* ibus-xim on DISPLAY=:1: XOpenIM still returns a live IM even with
+         * @im=none, and XCreateIC then stalls later Xlib calls so NativeWidget
+         * never runs. Do not open an XIM at all. */
+        XSetLocaleModifiers("@im=none");
+        _xim = NULL;
+        fprintf(stderr, "X11Display skip XOpenIM im=none xim=%p\n", _xim);
+        fflush(stderr);
+#else
         XSetLocaleModifiers("");
         _xim = XOpenIM(_display, NULL, NULL, NULL);
 
@@ -155,6 +168,7 @@ static void socketCallback(CFSocketRef s, CFSocketCallBackType type,
             XSetLocaleModifiers("@im=none");
             _xim = XOpenIM(_display, NULL, NULL, NULL);
         }
+#endif
 
         int errorBase;
         if (XRRQueryExtension(_display, &_rrEventBase, &errorBase)) {
@@ -998,7 +1012,41 @@ static NSDictionary *modeInfoToDictionary(const XRRModeInfo *mi, int depth) {
 #ifndef DARLING
     [[NSRunLoop currentRunLoop] addInputSource: _inputSource forMode: mode];
 #else
+    __attribute__((used)) static const char nextevent_x11_select_wait_v1[] =
+            "nextevent_x11_select_wait_v1";
+    (void) nextevent_x11_select_wait_v1;
+
     [self processPendingEvents];
+
+    /* Cocotron runModalSession polls with untilDate=[NSDate date], so
+       nextEvent returned nil immediately and nested
+       NSModalPanelRunLoopMode busy-spun. Park on the X11 connection
+       (select) like macOS waits on the window-server fd. Only the
+       modal pump waits; default-mode drains stay immediate. */
+    NSTimeInterval remaining =
+            untilDate ? [untilDate timeIntervalSinceNow] : 0.0;
+    BOOL modalPump =
+            mode != nil && [mode isEqualToString: NSModalPanelRunLoopMode];
+    if (remaining <= 0.0 && modalPump && _fileDescriptor >= 0) {
+        fd_set rfds;
+        struct timeval tv;
+        FD_ZERO(&rfds);
+        FD_SET(_fileDescriptor, &rfds);
+        tv.tv_sec = 0;
+        tv.tv_usec = 250000;
+        int n = select(_fileDescriptor + 1, &rfds, NULL, NULL, &tv);
+        if (n > 0)
+            [self processPendingEvents];
+        static int waitLogs;
+        if (waitLogs < 12) {
+            waitLogs++;
+            fprintf(stderr,
+                    "nextevent_x11_select_wait_v1 sel=%d remaining=%.4f "
+                    "mode=%s\n",
+                    n, remaining, [(mode ? mode : @"") UTF8String]);
+            fflush(stderr);
+        }
+    }
 #endif
 
     NSEvent *result = [super nextEventMatchingMask: mask

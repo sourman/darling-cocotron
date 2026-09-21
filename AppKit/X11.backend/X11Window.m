@@ -59,6 +59,8 @@ __attribute__((used)) const char x11_createwindow_min1_v1[] =
         "x11_createwindow_min1_v1";
 __attribute__((used)) const char onyx2d_xputimage_default_visual_v1[] =
         "onyx2d_xputimage_default_visual_v1";
+__attribute__((used)) const char lockfocus_skip_ft_v1[] =
+        "lockfocus_skip_ft_v1";
 
 @implementation X11Window
 
@@ -219,8 +221,12 @@ static NSData *makeWindowIcon() {
     }
 
     _gc = XCreateGC(_display, _window, 0, NULL);
+    fprintf(stderr, "X11Window after XCreateGC id=0x%lx\n", (unsigned long)_window);
+    fflush(stderr);
 
     [self syncDelegateProperties];
+    fprintf(stderr, "X11Window after syncDelegateProperties id=0x%lx\n", (unsigned long)_window);
+    fflush(stderr);
 
     Atom atm = XInternAtom(_display, "WM_DELETE_WINDOW", False);
     XSetWMProtocols(_display, _window, &atm, 1);
@@ -262,11 +268,20 @@ static NSData *makeWindowIcon() {
         XSetTransientForHint(_display, _window, [mainWindow windowHandle]);
     }
 
-    _xic = XCreateIC(x11disp->_xim,
-        XNInputStyle, XIMPreeditNothing | XIMStatusNothing,
-        XNClientWindow, _window,
-        XNFocusWindow, _window,
-        NULL);
+    _xic = NULL;
+    if (x11disp->_xim) {
+        fprintf(stderr, "X11Window XCreateIC start id=0x%lx xim=%p\n",
+                (unsigned long)_window, x11disp->_xim);
+        fflush(stderr);
+        _xic = XCreateIC(x11disp->_xim,
+            XNInputStyle, XIMPreeditNothing | XIMStatusNothing,
+            XNClientWindow, _window,
+            XNFocusWindow, _window,
+            NULL);
+        fprintf(stderr, "X11Window XCreateIC done id=0x%lx xic=%p\n",
+                (unsigned long)_window, _xic);
+        fflush(stderr);
+    }
 
     // Do not CGLGetWindow/ensureMapped here. Mapping every X11Window at
     // create (including NSCachedImageRep's 32x32 cache) hung recvmsg
@@ -280,7 +295,12 @@ static NSData *makeWindowIcon() {
     }
     [self setStyleMaskInternal: _styleMask force: YES];
 
+    fprintf(stderr, "X11Window setWindowIcon start id=0x%lx\n", (unsigned long)_window);
+    fflush(stderr);
     [self setWindowIcon];
+    fprintf(stderr, "X11Window init done id=0x%lx class=%s\n",
+            (unsigned long)_window, class_getName([delegate class]));
+    fflush(stderr);
 
     return self;
 }
@@ -459,8 +479,19 @@ __attribute__((used)) const char x11_ensure_mapped_show_path_v1[] =
 }
 
 - (O2Context *) createCGContextIfNeeded {
+    fprintf(stderr, "X11Window createCGContextIfNeeded enter id=0x%lx ctx=%p\n",
+            (unsigned long)_window, _context);
+    fflush(stderr);
     if (_context == nil) {
+        /* O2Context_builtin_FT / FcInit hangs in recvmsg on Darling and
+           blocks NSImage lockFocus before AddKeepAlive/NativeWidget. */
+        fprintf(stderr,
+                "X11Window createCGContextIfNeeded skip FT id=0x%lx\n",
+                (unsigned long)_window);
+        fflush(stderr);
         O2ColorSpaceRef colorSpace = O2ColorSpaceCreateDeviceRGB();
+        fprintf(stderr, "X11Window createCGContextIfNeeded surface start\n");
+        fflush(stderr);
         O2Surface *surface = [[O2Surface alloc]
                    initWithBytes: NULL
                            width: _frame.size.width
@@ -471,8 +502,17 @@ __attribute__((used)) const char x11_ensure_mapped_show_path_v1[] =
                       bitmapInfo: kO2ImageAlphaPremultipliedFirst |
                                   kO2BitmapByteOrder32Little];
         O2ColorSpaceRelease(colorSpace);
-        _context = [[O2Context_builtin_FT alloc] initWithSurface: surface
-                                                         flipped: NO];
+        fprintf(stderr,
+                "X11Window createCGContextIfNeeded bitmap start surface=%p\n",
+                surface);
+        fflush(stderr);
+        _context = [[O2BitmapContext alloc] initWithSurface: surface
+                                                    flipped: NO];
+        [surface release];
+        fprintf(stderr,
+                "X11Window createCGContextIfNeeded done ctx=%p (no FT)\n",
+                _context);
+        fflush(stderr);
     }
     return _context;
 }

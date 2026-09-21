@@ -337,7 +337,6 @@ NSNotificationName NSWorkspaceWillUnmountNotification = @"NSWorkspaceWillUnmount
 }
 
 - (NSURL *) URLForApplicationToOpenURL: (NSURL *) url {
-    // No LaunchServices default-handler map on Darling.
     return nil;
 }
 

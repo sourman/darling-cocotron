@@ -121,6 +121,9 @@ CA_EXPORT NSString *const kCAContentsFormatGray8Uint;
 - init;
 
 - (void) addSublayer: (CALayer *) layer;
+- (void) insertSublayer: (CALayer *) layer atIndex: (unsigned) index;
+- (void) insertSublayer: (CALayer *) layer below: (CALayer *) sibling;
+- (void) insertSublayer: (CALayer *) layer above: (CALayer *) sibling;
 - (void) replaceSublayer: (CALayer *) layer with: (CALayer *) other;
 - (void) display;
 - (void) displayIfNeeded;

@@ -42,6 +42,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 #import <AppKit/NSWindow-Private.h>
 #import <AppKit/NSWorkspace.h>
 #import <CoreGraphics/CGWindow.h>
+#import <Foundation/NSThread.h>
 #import <objc/message.h>
 #import <pthread.h>
 #import <stdio.h>
@@ -774,6 +775,16 @@ static const void *NSApplicationAppearanceKey = &NSApplicationAppearanceKey;
 }
 
 - (void) sendEvent: (NSEvent *) event {
+    static int sendEventLogs;
+    if (sendEventLogs < 24) {
+        sendEventLogs++;
+        NSAPP_CHROME_WINDOW_LOG(
+                "sendEvent n=%d ev=%p type=%ld win=%p class=%s", sendEventLogs,
+                event, event ? (long) [event type] : -1,
+                event ? [event window] : nil,
+                event && [event window] ? object_getClassName([event window])
+                                        : "-");
+    }
     if ([event type] == NSKeyDown) {
         unsigned modifierFlags = [event modifierFlags];
 
@@ -796,6 +807,17 @@ static const void *NSApplicationAppearanceKey = &NSApplicationAppearanceKey;
                             dequeue: (BOOL) dequeue
 {
     NSEvent *nextEvent = nil;
+    static int nextEventLogs;
+    if (nextEventLogs < 40) {
+        nextEventLogs++;
+        NSAPP_CHROME_WINDOW_LOG(
+                "nextEventMatchingMask n=%d mask=%llu mode=%s until=%.3f "
+                "running=%d windows=%lu",
+                nextEventLogs, (unsigned long long) mask,
+                [(mode ? mode : @"") UTF8String],
+                untilDate ? [untilDate timeIntervalSinceNow] : -1,
+                _isRunning, (unsigned long) [_windows count]);
+    }
 
     do {
         NSAutoreleasePool *pool = [NSAutoreleasePool new];
@@ -828,6 +850,19 @@ static const void *NSApplicationAppearanceKey = &NSApplicationAppearanceKey;
 
                 [pool release];
     } while (nextEvent == nil && [untilDate timeIntervalSinceNow] > 0);
+
+    static int nextEventRetLogs;
+    if (nextEventRetLogs < 16) {
+        nextEventRetLogs++;
+        NSAPP_CHROME_WINDOW_LOG(
+                "nextEventMatchingMask ret n=%d ev=%p type=%ld win=%p class=%s",
+                nextEventRetLogs, nextEvent,
+                nextEvent ? (long) [nextEvent type] : -1,
+                nextEvent ? [nextEvent window] : nil,
+                nextEvent && [nextEvent window]
+                        ? object_getClassName([nextEvent window])
+                        : "-");
+    }
 
     if (nextEvent != nil) {
         nextEvent = [nextEvent retain];
@@ -1008,6 +1043,18 @@ static const void *NSApplicationAppearanceKey = &NSApplicationAppearanceKey;
 
     [_modalStack addObject: session];
 
+    NSAPP_CHROME_WINDOW_LOG(
+            "beginModalSession window=%p class=%s title='%s' visible=%d "
+            "frame={{%.0f,%.0f},{%.0f,%.0f}} stack=%lu",
+            window, window ? object_getClassName(window) : "-",
+            window ? [[window title] UTF8String] ?: "" : "",
+            window ? (int) [window isVisible] : -1,
+            window ? [window frame].origin.x : 0,
+            window ? [window frame].origin.y : 0,
+            window ? [window frame].size.width : 0,
+            window ? [window frame].size.height : 0,
+            (unsigned long) [_modalStack count]);
+
     [window _hideMenuViewIfNeeded];
     if (![window isVisible]) {
         [window center];
@@ -1096,10 +1143,25 @@ static const void *NSApplicationAppearanceKey = &NSApplicationAppearanceKey;
 
     NSModalSession session = [self beginModalSessionForWindow: window];
     NSModalResponse result;
+    __attribute__((used)) static const char nsmodal_runloop_wait_v1[] =
+            "nsmodal_runloop_wait_v1";
+    (void) nsmodal_runloop_wait_v1;
 
+    /* Cocotron used to busy-spin runModalSession with untilDate=[NSDate date]
+       (nextEvent returned nil immediately). nextEventMatchingMask now
+       parks on the X11 fd via select. Also pump NSModalPanelRunLoopMode
+       so CFRunLoop observers and the OK button can run, matching
+       beginSheet. */
+    NSAPP_CHROME_WINDOW_LOG(
+            "runModal wait begin window=%p class=%s", window,
+            window ? object_getClassName(window) : "-");
     while ((result = [NSApp runModalSession: session]) ==
-           NSRunContinuesResponse)
-        ;
+           NSRunContinuesResponse) {
+        [[NSRunLoop currentRunLoop]
+                runMode: NSModalPanelRunLoopMode
+             beforeDate: [NSDate dateWithTimeIntervalSinceNow: 0.25]];
+    }
+    NSAPP_CHROME_WINDOW_LOG("runModal wait end result=%ld", (long) result);
     [self endModalSession: session];
 
     [values setObject: [NSNumber numberWithInteger: result] forKey: @"result"];
@@ -1108,6 +1170,12 @@ static const void *NSApplicationAppearanceKey = &NSApplicationAppearanceKey;
 - (NSModalResponse) runModalForWindow: (NSWindow *) window {
     NSMutableDictionary *values = [NSMutableDictionary dictionary];
     values[@"NSWindow"] = window;
+
+    NSAPP_CHROME_WINDOW_LOG(
+            "runModalForWindow window=%p class=%s title='%s' mainThread=%d",
+            window, window ? object_getClassName(window) : "-",
+            window ? [[window title] UTF8String] ?: "" : "",
+            (int) [NSThread isMainThread]);
 
     [self performSelectorOnMainThread: @selector(_mainThreadRunModalForWindow:)
                            withObject: values

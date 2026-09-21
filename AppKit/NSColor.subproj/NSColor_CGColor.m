@@ -30,7 +30,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 @implementation NSColor_CGColor
 
 - initWithColorRef: (CGColorRef) colorRef spaceName: (NSString *) spaceName {
-    _catalogName = @"";
+    self = [super init];
+    if (self == nil)
+        return nil;
+    /* Copy so dealloc's release is balanced; assigning @"" then releasing
+       over-freed the interned empty CFString. */
+    _catalogName = [@"" copy];
     _colorRef = CGColorRetain(colorRef);
     _colorSpaceName = [spaceName copy];
     _pattern = nil;
@@ -45,10 +50,19 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 }
 
 - (void) dealloc {
-    [_catalogName release];
-    CGColorRelease(_colorRef);
-    [_colorSpaceName release];
-    [_pattern release];
+    CGColorRef colorRef = _colorRef;
+    NSColorSpaceName spaceName = _colorSpaceName;
+    NSColorListName catalogName = _catalogName;
+    NSImage *pattern = _pattern;
+    _colorRef = NULL;
+    _colorSpaceName = nil;
+    _catalogName = nil;
+    _pattern = nil;
+    if (colorRef != NULL)
+        CGColorRelease(colorRef);
+    [spaceName release];
+    [catalogName release];
+    [pattern release];
     [super dealloc];
 }
 
