@@ -1,4 +1,22 @@
 /* Comet compatibility stubs. Symbols exist so dyld can bind; behavior is not implemented. */
+#import <Foundation/Foundation.h>
+
+/* Chromium's service-menu static init aborts unless these exist and answer
+ * instancesRespondToSelector:. They are private AppKit classes. */
+@interface _NSServiceEntry : NSObject
+- (NSString *)bundleIdentifier;
+@end
+@implementation _NSServiceEntry
+- (NSString *)bundleIdentifier { return @"stub"; }
+@end
+
+@interface _NSServicesMenuUpdater : NSObject
+- (void)populateMenu:(id)menu withServiceEntries:(id)entries forDisplay:(BOOL)display;
+@end
+@implementation _NSServicesMenuUpdater
+- (void)populateMenu:(id)menu withServiceEntries:(id)entries forDisplay:(BOOL)display {}
+@end
+
 __attribute__((visibility("default"), used)) void NSAccessibilityActionDescription(void) {}
 __attribute__((visibility("default"), used)) void NSAccessibilityRequiredAttribute(void) {}
 __attribute__((visibility("default"), used)) void NSTouchBarItemIdentifierCandidateList(void) {}

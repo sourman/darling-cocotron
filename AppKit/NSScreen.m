@@ -96,6 +96,22 @@ NSNotificationName const NSScreenColorSpaceDidChangeNotification = @"NSScreenCol
     return self->_directDisplayID;
 }
 
+- (CGFloat) backingScaleFactor {
+    return 1.0;
+}
+
+- (CGFloat) maximumPotentialExtendedDynamicRangeColorComponentValue {
+    return 1.0;
+}
+
+- (CGFloat) maximumExtendedDynamicRangeColorComponentValue {
+    return 1.0;
+}
+
+- (CGFloat) maximumReferenceExtendedDynamicRangeColorComponentValue {
+    return 1.0;
+}
+
 - (void) setCgDirectDisplayID: (CGDirectDisplayID) displayID {
     self->_directDisplayID = displayID;
 }
