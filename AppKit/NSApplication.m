@@ -1682,3 +1682,9 @@ BOOL NSPerformService(NSString *itemName, NSPasteboard *pasteboard) {
     NSUnimplementedFunction();
     return NO;
 }
+
+@implementation NSApplication (DarlingAccessibility)
+- (NSNumber *) voiceOverEnabled {
+    return [NSNumber numberWithBool: NO];
+}
+@end
