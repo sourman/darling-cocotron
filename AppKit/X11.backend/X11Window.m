@@ -36,6 +36,8 @@
 #import "X11Display.h"
 #import "X11SubWindow.h"
 #import "X11Window.h"
+#import <objc/runtime.h>
+#import <stdio.h>
 #import <X11/Xatom.h>
 #import <X11/Xutil.h>
 
@@ -159,7 +161,23 @@ static NSData *makeWindowIcon() {
     _display = [x11disp display];
 
     _frame = [self transformFrame: [delegate frame]];
+    fprintf(stderr,
+            "X11Window content-in-frame %g,%g %gx%g delegate %s\n",
+            _frame.origin.x, _frame.origin.y, _frame.size.width,
+            _frame.size.height, class_getName([delegate class]));
     BOOL isPanel = [delegate isKindOfClass: [NSPanel class]];
+    if (!isPanel &&
+        (_frame.size.width < 800 || _frame.size.height < 600)) {
+        _frame.size.width = 800;
+        _frame.size.height = 600;
+        if (_frame.origin.x < 0 || _frame.origin.x > 1600)
+            _frame.origin.x = 80;
+        if (_frame.origin.y < 0 || _frame.origin.y > 1000)
+            _frame.origin.y = 80;
+        fprintf(stderr, "X11Window expanded frame to %g,%g %gx%g\n",
+                _frame.origin.x, _frame.origin.y, _frame.size.width,
+                _frame.size.height);
+    }
     if (isPanel && _styleMask & NSDocModalWindowMask)
         _styleMask = NSBorderlessWindowMask;
     // TODO: get rid of these glX calls
@@ -265,6 +283,9 @@ static NSData *makeWindowIcon() {
     [self setStyleMaskInternal: _styleMask force: YES];
 
     [self setWindowIcon];
+
+    if (!isPanel)
+        [self ensureMapped];
 
     return self;
 }

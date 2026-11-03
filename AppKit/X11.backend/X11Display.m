@@ -19,6 +19,7 @@
  SOFTWARE. */
 
 #import "X11Display.h"
+#import <stdio.h>
 #import "NSEvent_mouse.h"
 #import "X11Cursor.h"
 #import "X11Pasteboard.h"
@@ -263,6 +264,12 @@ static void socketCallback(CFSocketRef s, CFSocketCallBackType type,
         }
 
         NSArray* array = [NSArray arrayWithArray: retval];
+        for (NSScreen *screen in array) {
+            NSRect frame = [screen frame];
+            fprintf(stderr, "NSScreen frame %g,%g %gx%g\n",
+                    frame.origin.x, frame.origin.y, frame.size.width,
+                    frame.size.height);
+        }
         _lastScreens = [array retain];
         return array;
     } else {
