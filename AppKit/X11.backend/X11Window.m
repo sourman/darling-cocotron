@@ -235,7 +235,7 @@ static NSData *makeWindowIcon() {
                             .res_class = (char *) name};
     XSetClassHint(_display, _window, &classHint);
 
-    XSetWindowBackgroundPixmap(_display, _window, None);
+    XSetWindowBackground(_display, _window, BlackPixel(_display, screen));
 
     _isModal = [delegate isSheet] || [NSApp modalWindow] == delegate;
     // FIXME: There should be no need for this.
@@ -657,10 +657,39 @@ static NSData *makeWindowIcon() {
     CGLSetCurrentContext(prevContext);
 }
 
+- (void) blitBackingStore {
+    if (_context == nil || _window == 0 || _display == NULL)
+        return;
+    O2Surface *surface = [_context surface];
+    if (surface == nil)
+        return;
+    size_t width = O2ImageGetWidth(surface);
+    size_t height = O2ImageGetHeight(surface);
+    void *bytes = [surface pixelBytes];
+    if (width < 1 || height < 1 || bytes == NULL)
+        return;
+    Visual *visual = (_visualInfo != NULL) ? _visualInfo->visual
+                                           : DefaultVisual(_display, DefaultScreen(_display));
+    int depth = (_visualInfo != NULL) ? _visualInfo->depth
+                                      : DefaultDepth(_display, DefaultScreen(_display));
+    XImage *image = XCreateImage(_display, visual, depth, ZPixmap, 0,
+                                 (char *) bytes, width, height, 32, (int) width * 4);
+    if (image == NULL)
+        return;
+    GC gc = XCreateGC(_display, _window, 0, NULL);
+    XPutImage(_display, _window, gc, image, 0, 0, 0, 0, width, height);
+    XFreeGC(_display, gc);
+    image->data = NULL;
+    XDestroyImage(image);
+    XFlush(_display);
+    fprintf(stderr, "X11Window blit %zux%zu\n", width, height);
+}
+
 - (void) flushBuffer {
     if (_context == nil)
         return;
     O2ContextFlush(_context);
+    [self blitBackingStore];
     [self openGLFlushBuffer];
 }
 
