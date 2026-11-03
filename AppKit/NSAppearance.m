@@ -18,6 +18,7 @@
 */
 
 #import <AppKit/NSAppearance.h>
+#import <Foundation/NSArray.h>
 
 NSString *const NSAppearanceNameAqua = @"NSAppearanceNameAqua";
 NSString *const NSAppearanceNameDarkAqua = @"NSAppearanceNameDarkAqua";
@@ -64,6 +65,14 @@ NSString *const NSAppearanceNameControlStrip =
 - (void) performAsCurrentDrawingAppearance: (void (^)(void)) block {
     if (block)
         block();
+}
+
+- (NSAppearanceName) name {
+    return NSAppearanceNameAqua;
+}
+
+- (NSAppearanceName) bestMatchFromAppearancesWithNames: (NSArray *) appearances {
+    return NSAppearanceNameAqua;
 }
 
 @end
