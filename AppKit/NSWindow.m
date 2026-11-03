@@ -1254,7 +1254,6 @@ static BOOL _allowsAutomaticWindowTabbing;
 }
 
 - (void) setCollectionBehavior: (NSWindowCollectionBehavior) behavior {
-    NSUnimplementedMethod();
 }
 
 - (void) setLevel: (NSInteger) value {
@@ -1552,7 +1551,6 @@ static BOOL _allowsAutomaticWindowTabbing;
 }
 
 - (NSWindowCollectionBehavior) collectionBehavior {
-    NSUnimplementedMethod();
     return 0;
 }
 

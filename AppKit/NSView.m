@@ -1254,7 +1254,10 @@ static inline void buildTransformsIfNeeded(NSView *self) {
                  (NSComparisonResult (*)(id, id, void *)) compareFunction
                            context: (void *) context
 {
-    NSUnimplementedMethod();
+    if (compareFunction == NULL || [_subviews count] < 2)
+        return;
+    [_subviews sortUsingFunction: (NSInteger (*)(id, id, void *)) compareFunction
+                         context: context];
 }
 
 - (void) didAddSubview: (NSView *) subview {

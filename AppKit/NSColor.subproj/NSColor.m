@@ -909,6 +909,10 @@ static void releasePatternInfo(void *info) {
     return nil;
 }
 
+- (NSColor *) colorUsingColorSpace: (id) space {
+    return self;
+}
+
 - (NSColor *) colorUsingColorSpaceName: (NSColorSpaceName) colorSpace {
     NSInvalidAbstractInvocation();
     return nil;
