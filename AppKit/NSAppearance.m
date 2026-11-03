@@ -61,4 +61,9 @@ NSString *const NSAppearanceNameControlStrip =
     return YES;
 }
 
+- (void) performAsCurrentDrawingAppearance: (void (^)(void)) block {
+    if (block)
+        block();
+}
+
 @end
