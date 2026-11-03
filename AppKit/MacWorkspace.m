@@ -270,6 +270,10 @@
     NSUnimplementedMethod();
 }
 
+- (NSURL *) URLForApplicationToOpenURL: (NSURL *) url {
+    return nil;
+}
+
 - (NSURL *) URLForApplicationWithBundleIdentifier: (NSString *) bundleIdentifier
 {
     CFURLRef url;

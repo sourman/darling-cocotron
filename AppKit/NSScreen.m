@@ -19,6 +19,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 
 // Original - Christopher Lloyd <cjwl@objc.net>
 #import <AppKit/NSApplication.h>
+#import <AppKit/NSColorSpace.h>
 #import <AppKit/NSDisplay.h>
 #import <AppKit/NSScreen.h>
 #import <AppKit/NSWindow.h>
@@ -110,6 +111,18 @@ NSNotificationName const NSScreenColorSpaceDidChangeNotification = @"NSScreenCol
 
 - (CGFloat) maximumReferenceExtendedDynamicRangeColorComponentValue {
     return 1.0;
+}
+
+- (NSColorSpace *) colorSpace {
+    return [NSColorSpace sRGBColorSpace];
+}
+
+- (NSInteger) maximumFramesPerSecond {
+    return 60;
+}
+
+- (NSString *) localizedName {
+    return @"Darling";
 }
 
 - (void) setCgDirectDisplayID: (CGDirectDisplayID) displayID {

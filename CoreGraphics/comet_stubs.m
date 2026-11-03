@@ -1,8 +1,8 @@
 /* Comet compatibility stubs. Symbols exist so dyld can bind; behavior is not implemented. */
 __attribute__((visibility("default"), used)) void CGColorCreateCopyByMatchingToColorSpace(void) {}
 __attribute__((visibility("default"), used)) void CGColorGetTypeID(void) {}
-__attribute__((visibility("default"), used)) void CGColorSpaceCopyICCData(void) {}
-__attribute__((visibility("default"), used)) void CGColorSpaceCopyName(void) {}
+__attribute__((visibility("default"), used)) void *CGColorSpaceCopyICCData(void *space) { return 0; }
+__attribute__((visibility("default"), used)) void *CGColorSpaceCopyName(void *space) { return 0; }
 __attribute__((visibility("default"), used)) void CGColorSpaceCreateICCBased(void) {}
 __attribute__((visibility("default"), used)) void CGDirectDisplayCopyCurrentMetalDevice(void) {}
 __attribute__((visibility("default"), used)) void CGDisplayCopyColorSpace(void) {}
