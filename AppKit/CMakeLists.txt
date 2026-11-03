@@ -622,3 +622,10 @@ add_backend(X11
 		fontconfig
 		xkbfile
 )
+
+# Comet dyld compatibility stubs
+if(TARGET AppKit_obj)
+  target_sources(AppKit_obj PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/comet_stubs.m)
+elseif(TARGET AppKit)
+  target_sources(AppKit PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/comet_stubs.m)
+endif()
