@@ -23,6 +23,18 @@
 
 @implementation NSAccessibilityRemoteUIElement
 
++ (id) remoteTokenForLocalUIElement: (id) element {
+    return nil;
+}
+
++ (NSMethodSignature *) methodSignatureForSelector: (SEL) aSelector {
+    return [NSMethodSignature signatureWithObjCTypes: "@@:@"];
+}
+
++ (void) forwardInvocation: (NSInvocation *) anInvocation {
+    NSLog(@"Stub called: +%@ in %@", NSStringFromSelector([anInvocation selector]), [self class]);
+}
+
 - (NSMethodSignature *)methodSignatureForSelector:(SEL)aSelector
 {
     return [NSMethodSignature signatureWithObjCTypes: "v@:"];

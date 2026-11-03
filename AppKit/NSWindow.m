@@ -1417,6 +1417,19 @@ static BOOL _allowsAutomaticWindowTabbing;
     return nil;
 }
 
+- (NSPoint) convertPointFromScreen: (NSPoint) point {
+    return point;
+}
+
+- (void) setAppearance: (NSAppearance *) appearance {
+}
+
+- (void) setTitleVisibility: (NSInteger) visibility {
+}
+
+- (void) setTitlebarAppearsTransparent: (BOOL) transparent {
+}
+
 - (NSButtonCell *) defaultButtonCell {
     return _defaultButtonCell;
 }

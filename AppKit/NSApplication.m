@@ -1689,6 +1689,14 @@ BOOL NSPerformService(NSString *itemName, NSPasteboard *pasteboard) {
     return [NSNumber numberWithBool: NO];
 }
 
+- (BOOL) isFullKeyboardAccessEnabled {
+    return NO;
+}
+
+- (void) doesNotRecognizeSelector: (SEL) selector {
+    NSLog(@"NSApplication missing %s", sel_getName(selector));
+}
+
 - (NSAppearance *) effectiveAppearance {
     return [NSAppearance appearanceNamed: NSAppearanceNameAqua];
 }

@@ -1,4 +1,7 @@
 #import <Foundation/NSDictionary.h>
+#import <Foundation/NSInvocation.h>
+#import <Foundation/NSMethodSignature.h>
+#import <Foundation/NSString.h>
 #import <QuartzCore/CAAnimation.h>
 #import <QuartzCore/CALayer.h>
 #import <QuartzCore/CALayerContext.h>
@@ -31,6 +34,40 @@ NSString *const kCAContentsFormatRGBA16Float = @"RGBAh";
 NSString *const kCAContentsFormatGray8Uint = @"Gray8";
 
 @implementation CALayer
+
+- (void) setGeometryFlipped: (BOOL) value {
+}
+
+- (BOOL) isGeometryFlipped {
+    return NO;
+}
+
+- (BOOL) geometryFlipped {
+    return NO;
+}
+
+- (void) setAutoresizingMask: (unsigned int) mask {
+}
+
+- (NSMethodSignature *) methodSignatureForSelector: (SEL) selector {
+    return [NSMethodSignature signatureWithObjCTypes: "v@:"];
+}
+
+- (void) forwardInvocation: (NSInvocation *) invocation {
+}
+
+- (void) doesNotRecognizeSelector: (SEL) selector {
+}
+
++ (NSMethodSignature *) methodSignatureForSelector: (SEL) selector {
+    return [NSMethodSignature signatureWithObjCTypes: "v@:"];
+}
+
++ (void) forwardInvocation: (NSInvocation *) invocation {
+}
+
++ (void) doesNotRecognizeSelector: (SEL) selector {
+}
 
 + layer {
     return [[[self alloc] init] autorelease];
