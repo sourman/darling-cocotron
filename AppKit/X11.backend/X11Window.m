@@ -763,6 +763,24 @@ static NSData *makeWindowIcon() {
     fflush(stderr);
 }
 
+static void X11LogRendererLayer(NSView *view) {
+    if (view == nil)
+        return;
+    if (strcmp(class_getName([view class]), "RenderWidgetHostViewCocoa") == 0) {
+        CALayer *layer = [view layer];
+        id contents = [layer contents];
+        BOOL ioSurface = contents != nil &&
+                         strcmp(class_getName([contents class]), "IOSurface") == 0;
+        fprintf(stderr, "RWHV layer %p contents %s ioSurface %s\n",
+                layer,
+                contents == nil ? "nil" : class_getName([contents class]),
+                ioSurface ? "yes" : "no");
+        fflush(stderr);
+    }
+    for (NSView *subview in [view subviews])
+        X11LogRendererLayer(subview);
+}
+
 static BOOL X11CopyLayerImage(CALayer *layer, uint8_t *dst, size_t dstW, size_t dstH) {
     id contents = [layer contents];
     if ([contents isKindOfClass: [O2Image class]]) {
@@ -845,6 +863,7 @@ static void X11CopyViewTree(NSView *view, uint8_t *dst, size_t dstW, size_t dstH
         if (bytes != NULL && width > 0 && height > 0)
             X11CopyViewTree(content, bytes, width, height);
     }
+    X11LogRendererLayer(content);
     [self blitBackingStore];
     [self openGLFlushBuffer];
 }
