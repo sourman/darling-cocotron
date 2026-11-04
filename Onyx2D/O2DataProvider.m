@@ -106,6 +106,13 @@ CFDataRef O2DataProviderCopyData(O2DataProviderRef self) {
      */
     if (self == NULL || self == (O2DataProviderRef)(uintptr_t)0x2121212121212121)
         return NULL;
+    /*
+     * Profile-182 died at this function+0x3c (cmpq 0x10(%rax)) with
+     * rax == 0xbadbad00badb0067, a freed-object pointer that is not the
+     * 0x21 fill. The load of _data faults. Treat that poison as no provider.
+     */
+    if (((uintptr_t)self >> 32) == 0xbadbad00)
+        return NULL;
     if (self->_data != nil)
         return (CFDataRef)[self->_data copy];
     else
