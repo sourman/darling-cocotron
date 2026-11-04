@@ -767,15 +767,27 @@ static void X11LogRendererLayer(NSView *view) {
     if (view == nil)
         return;
     if (strcmp(class_getName([view class]), "RenderWidgetHostViewCocoa") == 0) {
+        static int logged;
         CALayer *layer = [view layer];
-        id contents = [layer contents];
-        BOOL ioSurface = contents != nil &&
-                         strcmp(class_getName([contents class]), "IOSurface") == 0;
-        fprintf(stderr, "RWHV layer %p contents %s ioSurface %s\n",
-                layer,
-                contents == nil ? "nil" : class_getName([contents class]),
-                ioSurface ? "yes" : "no");
-        fflush(stderr);
+        id contents = nil;
+        size_t frameW = 0;
+        size_t frameH = 0;
+        if (layer != nil)
+            [layer display];
+        contents = [layer contents];
+        frameW = 0;
+        frameH = 0;
+        if ([contents isKindOfClass: [O2Image class]]) {
+            frameW = CGImageGetWidth((CGImageRef) contents);
+            frameH = CGImageGetHeight((CGImageRef) contents);
+        }
+        if (!logged) {
+            logged = 1;
+            fprintf(stderr,
+                    "RWHV blit contents %p frame %zux%zu\n",
+                    contents, frameW, frameH);
+            fflush(stderr);
+        }
     }
     for (NSView *subview in [view subviews])
         X11LogRendererLayer(subview);
@@ -787,7 +799,9 @@ static BOOL X11CopyLayerImage(CALayer *layer, uint8_t *dst, size_t dstW, size_t 
         CGImageRef image = (CGImageRef) contents;
         size_t width = CGImageGetWidth(image);
         size_t height = CGImageGetHeight(image);
-        if (width == dstW && height > 0 && height <= dstH) {
+        size_t copyW = width < dstW ? width : dstW;
+        size_t copyH = height < dstH ? height : dstH;
+        if (copyW > 0 && copyH > 0) {
             CFDataRef data = CGDataProviderCopyData(CGImageGetDataProvider(image));
             if (data != NULL) {
                 size_t row = width * 4;
@@ -806,9 +820,10 @@ static BOOL X11CopyLayerImage(CALayer *layer, uint8_t *dst, size_t dstW, size_t 
                     }
                 }
                 if (hasPagePixel) {
-                    size_t y0 = dstH - height;
-                    for (size_t y = 0; y < height; y++)
-                        memcpy(dst + (y0 + y) * dstW * 4, src + y * bytesPerRow, row);
+                    size_t y0 = dstH - copyH;
+                    size_t copyRow = copyW * 4;
+                    for (size_t y = 0; y < copyH; y++)
+                        memcpy(dst + (y0 + y) * dstW * 4, src + y * bytesPerRow, copyRow);
                     CFRelease(data);
                     return YES;
                 }
@@ -860,10 +875,11 @@ static void X11CopyViewTree(NSView *view, uint8_t *dst, size_t dstW, size_t dstH
         void *bytes = [surface pixelBytes];
         size_t width = O2ImageGetWidth(surface);
         size_t height = O2ImageGetHeight(surface);
-        if (bytes != NULL && width > 0 && height > 0)
+        if (bytes != NULL && width > 0 && height > 0) {
+            X11LogRendererLayer(content);
             X11CopyViewTree(content, bytes, width, height);
+        }
     }
-    X11LogRendererLayer(content);
     [self blitBackingStore];
     [self openGLFlushBuffer];
 }
