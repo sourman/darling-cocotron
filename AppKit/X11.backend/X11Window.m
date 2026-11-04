@@ -54,6 +54,13 @@ static int x11CreateWindowError(Display *display, XErrorEvent *event) {
 #import <X11/Xatom.h>
 #import <X11/Xutil.h>
 
+@interface DarlingIOSurface : NSObject
+- (void *) baseAddress;
+- (NSInteger) width;
+- (NSInteger) height;
+- (NSInteger) bytesPerRow;
+@end
+
 @implementation X11Window
 
 + (Visual *) visual {
@@ -792,13 +799,6 @@ static void X11LogRendererLayer(NSView *view) {
     for (NSView *subview in [view subviews])
         X11LogRendererLayer(subview);
 }
-
-@interface DarlingIOSurface : NSObject
-- (void *) baseAddress;
-- (NSInteger) width;
-- (NSInteger) height;
-- (NSInteger) bytesPerRow;
-@end
 
 static BOOL X11CopyLayerImage(CALayer *layer, uint8_t *dst, size_t dstW, size_t dstH) {
     id contents = [layer contents];
