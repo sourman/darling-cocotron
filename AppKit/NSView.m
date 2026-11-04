@@ -1036,6 +1036,13 @@ static inline void buildTransformsIfNeeded(NSView *self) {
     // Cocoa does not post the notification if the frames are equal
     // Possible that resizeSubviewsWithOldSize is not called if the sizes are
     // equal
+    if ((frame.size.width < 1 || frame.size.height < 1) && _superview != nil &&
+        strcmp(class_getName([self class]), "WebContentsViewCocoa") == 0) {
+        NSRect superBounds = [_superview bounds];
+        if (superBounds.size.width >= 1 && superBounds.size.height >= 1)
+            frame = superBounds;
+    }
+
     if (NSEqualRects(_frame, frame))
         return;
 
@@ -2916,9 +2923,31 @@ static NSView *viewBeingPrinted = nil;
         while ((child = [viewEnumerator nextObject])) {
             if ([child isHidden] || ![child canDraw])
                 continue;
-            fprintf(stderr, "NSView drawLayer child %s %.0fx%.0f\n",
-                    class_getName([child class]), [child bounds].size.width, [child bounds].size.height);
+            if (([child bounds].size.width < 1 || [child bounds].size.height < 1) &&
+                strcmp(class_getName([child class]), "WebContentsViewCocoa") == 0 &&
+                [self bounds].size.width >= 1 && [self bounds].size.height >= 1) {
+                [child setFrame: [self bounds]];
+            }
+            fprintf(stderr, "NSView drawLayer child %s %.0fx%.0f subviews %u\n",
+                    class_getName([child class]), [child bounds].size.width, [child bounds].size.height,
+                    (unsigned) [[child subviews] count]);
             fflush(stderr);
+            for (NSView *grandchild in [child subviews]) {
+                if ([grandchild isHidden] || ![grandchild canDraw])
+                    continue;
+                if ([grandchild bounds].size.width < 1 || [grandchild bounds].size.height < 1)
+                    [grandchild setFrame: [child bounds]];
+                fprintf(stderr, "NSView drawLayer grandchild %s %.0fx%.0f\n",
+                        class_getName([grandchild class]),
+                        [grandchild bounds].size.width, [grandchild bounds].size.height);
+                CGContextSaveGState(cgContext);
+                NSRect nested = [grandchild frame];
+                NSRect childFrame = [child frame];
+                CGContextTranslateCTM(cgContext, childFrame.origin.x + nested.origin.x,
+                                      childFrame.origin.y + nested.origin.y);
+                [grandchild drawRect: [grandchild bounds]];
+                CGContextRestoreGState(cgContext);
+            }
             if (strcmp(class_getName([child class]), "ViewsCompositorSuperview") == 0) {
                 id compContents = [[child layer] contents];
                 if ([compContents isKindOfClass: [O2Image class]]) {
