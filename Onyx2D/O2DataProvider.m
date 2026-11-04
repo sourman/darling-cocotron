@@ -104,14 +104,13 @@ CFDataRef O2DataProviderCopyData(O2DataProviderRef self) {
      * pointer is not NULL, so the load of _data at this function+0x28
      * faults. Treat that the same as a null provider.
      */
-    if (self == NULL || self == (O2DataProviderRef)(uintptr_t)0x2121212121212121)
-        return NULL;
     /*
-     * Profile-182 died at this function+0x3c (cmpq 0x10(%rax)) with
-     * rax == 0xbadbad00badb0067, a freed-object pointer that is not the
-     * 0x21 fill. The load of _data faults. Treat that poison as no provider.
+     * Profile-182 died at cmpq 0x10(%rax) with rax == 0xbadbad00badb0067.
+     * The next launch died at the same load with rax == 0x4085d00000000000.
+     * Both are non-canonical, so the _data load faults. A live object
+     * (heap or a mapped image) sits in the low canonical half.
      */
-    if (((uintptr_t)self >> 32) == 0xbadbad00)
+    if (self == NULL || (uintptr_t)self > 0x00007fffffffffffULL)
         return NULL;
     if (self->_data != nil)
         return (CFDataRef)[self->_data copy];
