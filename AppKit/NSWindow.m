@@ -1113,6 +1113,18 @@ static BOOL _allowsAutomaticWindowTabbing;
     _contentView = view;
 
     [_backgroundView addSubview: _contentView];
+    /*
+     * orderWindow can post occlusion before the host view exists. The
+     * delegate then takes the null-host return and never calls
+     * SetNeedsBeginFrames. Post again once the view is attached.
+     */
+    if (_isVisible) {
+        fprintf(stderr,
+                "NSWindow occlusion repost content view window %p view %p\n",
+                self, view);
+        fflush(stderr);
+        [self postNotificationName: NSWindowDidChangeOcclusionStateNotification];
+    }
 }
 
 - (void) setInitialFirstResponder: (NSView *) view {
