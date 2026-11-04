@@ -773,6 +773,8 @@ static BOOL _allowsAutomaticWindowTabbing;
             {NSWindowWillMiniaturizeNotification,
              @selector(windowWillMiniaturize:)},
             {NSWindowWillMoveNotification, @selector(windowWillMove:)},
+            {NSWindowDidChangeOcclusionStateNotification,
+             @selector(windowDidChangeOcclusionState:)},
             {nil, NULL}};
 
     if (_delegate != nil) {
@@ -2240,7 +2242,14 @@ static BOOL _allowsAutomaticWindowTabbing;
 
     [self postNotificationName: NSWindowDidMoveNotification];
     if (place == NSWindowAbove || place == NSWindowBelow) {
-        fprintf(stderr, "NSWindow occlusion notify visible %d\n", _isVisible);
+        id delegate = _delegate;
+        BOOL responds = [delegate respondsToSelector:
+                @selector(windowDidChangeOcclusionState:)];
+        fprintf(stderr,
+                "NSWindow occlusion notify visible %d window %p delegate %s responds %d main %d\n",
+                _isVisible, self,
+                delegate ? [NSStringFromClass([delegate class]) UTF8String] : "(nil)",
+                responds, [NSThread isMainThread]);
         fflush(stderr);
         [self postNotificationName: NSWindowDidChangeOcclusionStateNotification];
     }
