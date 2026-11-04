@@ -38,11 +38,14 @@
 #import "X11Window.h"
 #import <objc/runtime.h>
 #import <stdio.h>
+#import <unistd.h>
 
 static int createError;
 
 static int x11CreateWindowError(Display *display, XErrorEvent *event) {
     createError = event->error_code;
+    dprintf(2, "X11Create BadValue probe req=%d err=%d\n",
+            event->request_code, event->error_code);
     return 0;
 }
 #import <X11/Xatom.h>
@@ -223,28 +226,49 @@ static NSData *makeWindowIcon() {
     xattr_mask = CWOverrideRedirect | CWColormap;
     xattr.colormap = cmap;
 
-    // glXChooseVisual can hand back a visual this X server rejects
-    // (CreateWindow BadValue). Fall back to the parent visual so the
-    // window still maps.
-    createError = 0;
+    // Isolate the BadValue. The server accepts the parent visual at the
+    // screen depth; it rejects the GLX visual (same class and depth, so
+    // the visual id itself is the bad argument).
     int (*previous)(Display *, XErrorEvent *) =
             XSetErrorHandler(x11CreateWindowError);
-    _window = XCreateWindow(
-            _display, DefaultRootWindow(_display), _frame.origin.x,
-            _frame.origin.y, _frame.size.width, _frame.size.height, 0,
-            (_visualInfo == NULL) ? CopyFromParent : _visualInfo->depth,
-            InputOutput,
-            (_visualInfo == NULL) ? CopyFromParent : _visualInfo->visual,
-            xattr_mask, &xattr);
-    XSync(_display, False);
-    if (createError != 0) {
-        fprintf(stderr, "X11Window CreateWindow error %d, retrying\n",
-                createError);
+    unsigned width = (unsigned) _frame.size.width;
+    unsigned height = (unsigned) _frame.size.height;
+    if (width < 1)
+        width = 1;
+    if (height < 1)
+        height = 1;
+    Visual *defaultVisual = DefaultVisual(_display, screen);
+    int defaultDepth = DefaultDepth(_display, screen);
+    dprintf(2,
+            "X11Window size %ux%u glx vis=%lu depth=%d class=%d default vis=%lu depth=%d\n",
+            width, height,
+            _visualInfo ? _visualInfo->visualid : 0,
+            _visualInfo ? _visualInfo->depth : -1,
+            _visualInfo ? _visualInfo->class : -1,
+            defaultVisual->visualid, defaultDepth);
+
+    createError = 0;
+    if (_visualInfo != NULL) {
         _window = XCreateWindow(
-                _display, DefaultRootWindow(_display), _frame.origin.x,
-                _frame.origin.y, _frame.size.width, _frame.size.height, 0,
-                CopyFromParent, InputOutput, CopyFromParent, 0, NULL);
+                _display, DefaultRootWindow(_display), (int) _frame.origin.x,
+                (int) _frame.origin.y, width, height, 0, _visualInfo->depth,
+                InputOutput, _visualInfo->visual, xattr_mask, &xattr);
         XSync(_display, False);
+        dprintf(2, "X11Window glx visual err=%d\n", createError);
+    }
+    if (_visualInfo == NULL || createError != 0) {
+        createError = 0;
+        XSetWindowAttributes parentAttr;
+        parentAttr.override_redirect = xattr.override_redirect;
+        parentAttr.colormap = DefaultColormap(_display, screen);
+        _window = XCreateWindow(
+                _display, DefaultRootWindow(_display), (int) _frame.origin.x,
+                (int) _frame.origin.y, width, height, 0, defaultDepth,
+                InputOutput, defaultVisual, CWOverrideRedirect | CWColormap,
+                &parentAttr);
+        XSync(_display, False);
+        dprintf(2, "X11Window default visual err=%d\n", createError);
+        _visualInfo = NULL;
     }
     XSetErrorHandler(previous);
 

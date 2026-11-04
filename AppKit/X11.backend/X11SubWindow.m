@@ -1,4 +1,5 @@
 #import "X11SubWindow.h"
+#import <unistd.h>
 #import "X11Display.h"
 #import "X11Window.h"
 
@@ -20,9 +21,23 @@
 
     _display = [(X11Display *) [NSDisplay currentDisplay] display];
 
-    _window = XCreateSimpleWindow(_display, [parent windowHandle],
-                                  frame.origin.x, frame.origin.y,
-                                  frame.size.width, frame.size.height, 0, 0,
+    int x = (int) frame.origin.x;
+    int y = (int) frame.origin.y;
+    unsigned width = (unsigned) frame.size.width;
+    unsigned height = (unsigned) frame.size.height;
+    if (width < 1)
+        width = 1;
+    if (height < 1)
+        height = 1;
+    if (width > 65535)
+        width = 65535;
+    if (height > 65535)
+        height = 65535;
+    dprintf(2, "X11SubWindow parent=%lu %d,%d %ux%u\n",
+            (unsigned long) [parent windowHandle], x, y, width, height);
+
+    _window = XCreateSimpleWindow(_display, [parent windowHandle], x, y, width,
+                                  height, 0, 0,
                                   0 /* border_width, border, background */
     );
 
