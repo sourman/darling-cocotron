@@ -35,7 +35,13 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 }
 
 + (NSScrollerStyle) preferredScrollerStyle {
-    NSUnimplementedMethod();
+    /*
+     * Chromium sends this as content.mojom.UpdateScrollbarThemeParams
+     * preferred_scroller_style. That enum is only Legacy (0) or Overlay (1);
+     * a missing return leaves rax garbage and the renderer rejects the bind
+     * with VALIDATION_ERROR_DESERIALIZATION_FAILED.
+     */
+    return NSScrollerStyleLegacy;
 }
 /* OS X has a global default "AppleScrollBarVariant" with the values: Single,
  DoubleMin, DoubleMax, and DoubleBoth This controls the default position of the
