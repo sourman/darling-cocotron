@@ -31,7 +31,10 @@
 #import <Onyx2D/O2Context_builtin_FT.h>
 #import <Onyx2D/O2ImageSource.h>
 #import <Onyx2D/O2Surface.h>
+#import <QuartzCore/CALayer.h>
 #import <QuartzCore/CAWindowOpenGLContext.h>
+#import <CoreGraphics/CGImage.h>
+#import <string.h>
 
 #import "X11Display.h"
 #import "X11SubWindow.h"
@@ -731,12 +734,57 @@ static NSData *makeWindowIcon() {
     XDestroyImage(image);
     XFlush(_display);
     fprintf(stderr, "X11Window blit %zux%zu\n", width, height);
+    fflush(stderr);
+}
+
+static BOOL X11CopyLayerImage(CALayer *layer, uint8_t *dst, size_t dstW, size_t dstH) {
+    id contents = [layer contents];
+    if (contents != nil &&
+        CFGetTypeID((CFTypeRef) contents) == CGImageGetTypeID()) {
+        CGImageRef image = (CGImageRef) contents;
+        size_t width = CGImageGetWidth(image);
+        size_t height = CGImageGetHeight(image);
+        if (width == dstW && height == dstH) {
+            CFDataRef data = CGDataProviderCopyData(CGImageGetDataProvider(image));
+            if (data != NULL) {
+                size_t row = dstW * 4;
+                size_t bytesPerRow = CGImageGetBytesPerRow(image);
+                const uint8_t *src = CFDataGetBytePtr(data);
+                if (src != NULL && bytesPerRow >= row) {
+                    for (size_t y = 0; y < height; y++)
+                        memcpy(dst + y * row, src + y * bytesPerRow, row);
+                    CFRelease(data);
+                    return YES;
+                }
+                CFRelease(data);
+            }
+        }
+    }
+    for (CALayer *sublayer in [layer sublayers]) {
+        if (X11CopyLayerImage(sublayer, dst, dstW, dstH))
+            return YES;
+    }
+    return NO;
 }
 
 - (void) flushBuffer {
     if (_context == nil)
         return;
+    CALayer *layer = [[_delegate contentView] layer];
+    if (layer != nil) {
+        [layer displayIfNeeded];
+        if ([layer contents] == nil)
+            [layer display];
+    }
     O2ContextFlush(_context);
+    O2Surface *surface = [_context surface];
+    if (layer != nil && surface != nil) {
+        void *bytes = [surface pixelBytes];
+        size_t width = O2ImageGetWidth(surface);
+        size_t height = O2ImageGetHeight(surface);
+        if (bytes != NULL && width > 0 && height > 0)
+            X11CopyLayerImage(layer, bytes, width, height);
+    }
     [self blitBackingStore];
     [self openGLFlushBuffer];
 }

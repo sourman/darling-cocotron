@@ -308,11 +308,6 @@ NSString *const kCAContentsFormatGray8Uint = @"Gray8";
 }
 
 - (void) display {
-    if ([_delegate respondsToSelector: @selector(displayLayer:)]) {
-        [_delegate displayLayer: self];
-        return;
-    }
-
     size_t width = (size_t)CGRectGetWidth(_bounds);
     size_t height = (size_t)CGRectGetHeight(_bounds);
     if (width < 1 || height < 1)
@@ -337,6 +332,12 @@ NSString *const kCAContentsFormatGray8Uint = @"Gray8";
 }
 
 - (void) displayIfNeeded {
+    if (_needsDisplay) {
+        [self display];
+        _needsDisplay = NO;
+    }
+    for (CALayer *sublayer in _sublayers)
+        [sublayer displayIfNeeded];
 }
 
 - (void) drawInContext: (CGContextRef) context {
