@@ -18,6 +18,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 
 #import <Foundation/NSData.h>
+#import <stdint.h>
 #import <Foundation/NSFileManager.h>
 #import <Foundation/NSStream.h>
 #import <Foundation/NSURL.h>
@@ -97,7 +98,13 @@ void O2DataProviderRelease(O2DataProviderRef self) {
 }
 
 CFDataRef O2DataProviderCopyData(O2DataProviderRef self) {
-    if (self == NULL)
+    /*
+     * self == NULL is the guard added for a null provider. Comet also
+     * calls this with a freed object (bytes filled with 0x21). That
+     * pointer is not NULL, so the load of _data at this function+0x28
+     * faults. Treat that the same as a null provider.
+     */
+    if (self == NULL || self == (O2DataProviderRef)(uintptr_t)0x2121212121212121)
         return NULL;
     if (self->_data != nil)
         return (CFDataRef)[self->_data copy];
