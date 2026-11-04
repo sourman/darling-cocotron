@@ -38,6 +38,13 @@
 #import "X11Window.h"
 #import <objc/runtime.h>
 #import <stdio.h>
+
+static int createError;
+
+static int x11CreateWindowError(Display *display, XErrorEvent *event) {
+    createError = event->error_code;
+    return 0;
+}
 #import <X11/Xatom.h>
 #import <X11/Xutil.h>
 
@@ -216,6 +223,12 @@ static NSData *makeWindowIcon() {
     xattr_mask = CWOverrideRedirect | CWColormap;
     xattr.colormap = cmap;
 
+    // glXChooseVisual can hand back a visual this X server rejects
+    // (CreateWindow BadValue). Fall back to the parent visual so the
+    // window still maps.
+    createError = 0;
+    int (*previous)(Display *, XErrorEvent *) =
+            XSetErrorHandler(x11CreateWindowError);
     _window = XCreateWindow(
             _display, DefaultRootWindow(_display), _frame.origin.x,
             _frame.origin.y, _frame.size.width, _frame.size.height, 0,
@@ -223,6 +236,17 @@ static NSData *makeWindowIcon() {
             InputOutput,
             (_visualInfo == NULL) ? CopyFromParent : _visualInfo->visual,
             xattr_mask, &xattr);
+    XSync(_display, False);
+    if (createError != 0) {
+        fprintf(stderr, "X11Window CreateWindow error %d, retrying\n",
+                createError);
+        _window = XCreateWindow(
+                _display, DefaultRootWindow(_display), _frame.origin.x,
+                _frame.origin.y, _frame.size.width, _frame.size.height, 0,
+                CopyFromParent, InputOutput, CopyFromParent, 0, NULL);
+        XSync(_display, False);
+    }
+    XSetErrorHandler(previous);
 
     [self syncDelegateProperties];
 
