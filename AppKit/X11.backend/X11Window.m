@@ -793,8 +793,43 @@ static void X11LogRendererLayer(NSView *view) {
         X11LogRendererLayer(subview);
 }
 
+@interface DarlingIOSurface : NSObject
+- (void *) baseAddress;
+- (NSInteger) width;
+- (NSInteger) height;
+- (NSInteger) bytesPerRow;
+@end
+
 static BOOL X11CopyLayerImage(CALayer *layer, uint8_t *dst, size_t dstW, size_t dstH) {
     id contents = [layer contents];
+    if (contents != nil &&
+        strcmp(class_getName([contents class]), "IOSurface") == 0) {
+        DarlingIOSurface *surface = contents;
+        const uint8_t *src = [surface baseAddress];
+        size_t width = (size_t) [surface width];
+        size_t height = (size_t) [surface height];
+        size_t bytesPerRow = (size_t) [surface bytesPerRow];
+        size_t copyW = width < dstW ? width : dstW;
+        size_t copyH = height < dstH ? height : dstH;
+        if (src != NULL && bytesPerRow >= copyW * 4 && copyW > 0 && copyH > 0) {
+            BOOL hasPagePixel = NO;
+            for (size_t i = 0; i < copyW * copyH && !hasPagePixel; i++) {
+                size_t y = i / copyW;
+                size_t x = i % copyW;
+                const uint8_t *p = src + y * bytesPerRow + x * 4;
+                BOOL gray = p[0] == 0xed && p[1] == 0xed && p[2] == 0xed;
+                BOOL black = p[0] <= 12 && p[1] <= 12 && p[2] <= 12;
+                if (!gray && !black)
+                    hasPagePixel = YES;
+            }
+            if (hasPagePixel) {
+                size_t y0 = dstH - copyH;
+                for (size_t y = 0; y < copyH; y++)
+                    memcpy(dst + (y0 + y) * dstW * 4, src + y * bytesPerRow, copyW * 4);
+                return YES;
+            }
+        }
+    }
     if ([contents isKindOfClass: [O2Image class]]) {
         CGImageRef image = (CGImageRef) contents;
         size_t width = CGImageGetWidth(image);
