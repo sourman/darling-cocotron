@@ -32,5 +32,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 - initWithCGColorSpace: (CGColorSpaceRef) cgColorSpace;
 
 - (CGColorSpaceRef) CGColorSpace;
+- (NSInteger) colorSpaceModel;
+- (NSInteger) numberOfColorComponents;
+- (NSString *) localizedName;
 
 @end

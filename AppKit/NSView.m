@@ -43,7 +43,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 #import <CoreGraphics/CGWindow.h>
 #import <Foundation/NSKeyedArchiver.h>
 #import <Onyx2D/O2Context.h>
+#import <Onyx2D/O2Image.h>
 #import <QuartzCore/CALayerContext.h>
+#import <objc/runtime.h>
+#import <stdio.h>
+#import <string.h>
 #import <QuartzCore/CATransaction.h>
 #import <AppKit/NSLayoutConstraint.h>
 
@@ -1032,6 +1036,13 @@ static inline void buildTransformsIfNeeded(NSView *self) {
     // Cocoa does not post the notification if the frames are equal
     // Possible that resizeSubviewsWithOldSize is not called if the sizes are
     // equal
+    if ((frame.size.width < 1 || frame.size.height < 1) && _superview != nil &&
+        strcmp(class_getName([self class]), "WebContentsViewCocoa") == 0) {
+        NSRect superBounds = [_superview bounds];
+        if (superBounds.size.width >= 1 && superBounds.size.height >= 1)
+            frame = superBounds;
+    }
+
     if (NSEqualRects(_frame, frame))
         return;
 
@@ -1254,7 +1265,10 @@ static inline void buildTransformsIfNeeded(NSView *self) {
                  (NSComparisonResult (*)(id, id, void *)) compareFunction
                            context: (void *) context
 {
-    NSUnimplementedMethod();
+    if (compareFunction == NULL || [_subviews count] < 2)
+        return;
+    [_subviews sortUsingFunction: (NSInteger (*)(id, id, void *)) compareFunction
+                         context: context];
 }
 
 - (void) didAddSubview: (NSView *) subview {
@@ -1860,6 +1874,8 @@ static inline void buildTransformsIfNeeded(NSView *self) {
 
     if (_layer == nil) {
         _layer = [[self makeBackingLayer] retain];
+        if ([_layer delegate] == nil)
+            [_layer setDelegate: self];
         configureLayerGeometry(self);
     }
 
@@ -2883,6 +2899,103 @@ static NSView *viewBeingPrinted = nil;
 - (void)displayLayer: (CALayer*)layer
 {
     [self display];
+}
+
+- (void) drawLayer: (CALayer *) layer inContext: (CGContextRef) cgContext {
+    static __thread int drawingLayer;
+    if (drawingLayer || ![self canDraw])
+        return;
+    drawingLayer = 1;
+
+    NSGraphicsContext *context =
+            [NSGraphicsContext graphicsContextWithGraphicsPort: cgContext
+                                                       flipped: [self isFlipped]];
+    if ([self lockFocusIfCanDrawInContext: context]) {
+        CGContextSetCTM(cgContext, CGAffineTransformIdentity);
+        fprintf(stderr, "NSView drawLayer %s bounds %.0fx%.0f subviews %u\n",
+                class_getName([self class]), [self bounds].size.width, [self bounds].size.height,
+                (unsigned) [_subviews count]);
+        fflush(stderr);
+        [self drawRect: [self bounds]];
+
+        NSEnumerator *viewEnumerator = [self _subviewsInDisplayOrderEnumerator];
+        NSView *child = nil;
+        while ((child = [viewEnumerator nextObject])) {
+            if ([child isHidden] || ![child canDraw])
+                continue;
+            if (([child bounds].size.width < 1 || [child bounds].size.height < 1) &&
+                strcmp(class_getName([child class]), "WebContentsViewCocoa") == 0 &&
+                [self bounds].size.width >= 1 && [self bounds].size.height >= 1) {
+                [child setFrame: [self bounds]];
+            }
+            fprintf(stderr, "NSView drawLayer child %s %.0fx%.0f subviews %u\n",
+                    class_getName([child class]), [child bounds].size.width, [child bounds].size.height,
+                    (unsigned) [[child subviews] count]);
+            fflush(stderr);
+            for (NSView *grandchild in [child subviews]) {
+                if ([grandchild isHidden] || ![grandchild canDraw])
+                    continue;
+                if ([grandchild bounds].size.width < 1 || [grandchild bounds].size.height < 1)
+                    [grandchild setFrame: [child bounds]];
+                fprintf(stderr, "NSView drawLayer grandchild %s %.0fx%.0f\n",
+                        class_getName([grandchild class]),
+                        [grandchild bounds].size.width, [grandchild bounds].size.height);
+                CGContextSaveGState(cgContext);
+                NSRect nested = [grandchild frame];
+                NSRect childFrame = [child frame];
+                CGContextTranslateCTM(cgContext, childFrame.origin.x + nested.origin.x,
+                                      childFrame.origin.y + nested.origin.y);
+                [grandchild drawRect: [grandchild bounds]];
+                CGContextRestoreGState(cgContext);
+            }
+            if (strcmp(class_getName([child class]), "ViewsCompositorSuperview") == 0) {
+                id compContents = [[child layer] contents];
+                if ([compContents isKindOfClass: [O2Image class]]) {
+                    CGImageRef image = (CGImageRef) compContents;
+                    size_t width = CGImageGetWidth(image);
+                    size_t height = CGImageGetHeight(image);
+                    CFDataRef data = CGDataProviderCopyData(CGImageGetDataProvider(image));
+                    size_t page = 0;
+                    uint32_t first = 0;
+                    if (data != NULL) {
+                        size_t bpr = CGImageGetBytesPerRow(image);
+                        const uint8_t *src = CFDataGetBytePtr(data);
+                        if (src != NULL && bpr >= width * 4) {
+                            for (size_t y = 0; y < height; y++) {
+                                const uint8_t *row = src + y * bpr;
+                                for (size_t x = 0; x < width; x++) {
+                                    const uint8_t *p = row + x * 4;
+                                    BOOL black = p[0] <= 12 && p[1] <= 12 && p[2] <= 12;
+                                    BOOL gray = p[0] == 0xed && p[1] == 0xed && p[2] == 0xed;
+                                    if (!black && !gray) {
+                                        if (page == 0)
+                                            first = (uint32_t) p[0] | ((uint32_t) p[1] << 8) |
+                                                    ((uint32_t) p[2] << 16) | ((uint32_t) p[3] << 24);
+                                        page++;
+                                    }
+                                }
+                            }
+                        }
+                        CFRelease(data);
+                    }
+                    fprintf(stderr, "compositor image %zux%zu page %zu first %08x\n",
+                            width, height, page, first);
+                    fflush(stderr);
+                }
+            }
+            CGContextSaveGState(cgContext);
+            NSRect frame = [child frame];
+            CGContextTranslateCTM(cgContext, frame.origin.x, frame.origin.y);
+            [child drawRect: [child bounds]];
+            CGContextRestoreGState(cgContext);
+        }
+
+        CGContextRestoreGState(cgContext);
+        [[context focusStack] removeLastObject];
+        [NSGraphicsContext restoreGraphicsState];
+    }
+
+    drawingLayer = 0;
 }
 
 + (IBMetricsTable *) ibLayoutMetrics {

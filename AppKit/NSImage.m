@@ -815,6 +815,14 @@ NSImageName const NSImageNameTouchBarVolumeUpTemplate =
     return nil;
 }
 
+- (NSImageRep *) bestRepresentationForRect: (NSRect) rect
+                                     context: (NSGraphicsContext *) context
+                                       hints: (NSDictionary *) hints {
+    if ([_representations count] == 0)
+        return nil;
+    return [_representations objectAtIndex: 0];
+}
+
 - (NSImageRep *) bestRepresentationForDevice: (NSDictionary *) device {
     if (device == nil)
         device = [[NSGraphicsContext currentContext] deviceDescription];

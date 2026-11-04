@@ -18,6 +18,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 
 #import <Foundation/NSData.h>
+#import <stdint.h>
 #import <Foundation/NSFileManager.h>
 #import <Foundation/NSStream.h>
 #import <Foundation/NSURL.h>
@@ -97,6 +98,20 @@ void O2DataProviderRelease(O2DataProviderRef self) {
 }
 
 CFDataRef O2DataProviderCopyData(O2DataProviderRef self) {
+    /*
+     * self == NULL is the guard added for a null provider. Comet also
+     * calls this with a freed object (bytes filled with 0x21). That
+     * pointer is not NULL, so the load of _data at this function+0x28
+     * faults. Treat that the same as a null provider.
+     */
+    /*
+     * Profile-182 died at cmpq 0x10(%rax) with rax == 0xbadbad00badb0067.
+     * The next launch died at the same load with rax == 0x4085d00000000000.
+     * Both are non-canonical, so the _data load faults. A live object
+     * (heap or a mapped image) sits in the low canonical half.
+     */
+    if (self == NULL || (uintptr_t)self > 0x00007fffffffffffULL)
+        return NULL;
     if (self->_data != nil)
         return (CFDataRef)[self->_data copy];
     else

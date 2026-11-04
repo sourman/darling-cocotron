@@ -18,6 +18,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 
 #import <AppKit/NSBitmapImageRep-Private.h>
+#import <AppKit/NSColorSpace.h>
 #import <AppKit/NSColor.h>
 #import <AppKit/NSGraphicsContextFunctions.h>
 #import <AppKit/NSPasteboard.h>
@@ -46,6 +47,19 @@ NSBitmapImageRepPropertyKey NSImageCurrentFrameDuration =
 NSBitmapImageRepPropertyKey NSImageCurrentFrame = @"NSImageCurrentFrame";
 
 @implementation NSBitmapImageRep
+
+- (NSColorSpace *) colorSpace {
+    return [NSColorSpace sRGBColorSpace];
+}
+
+- (BOOL) drawInRect: (NSRect) dst
+           fromRect: (NSRect) src
+          operation: (NSCompositingOperation) op
+           fraction: (CGFloat) delta
+     respectFlipped: (BOOL) respectFlipped
+              hints: (NSDictionary *) hints {
+    return YES;
+}
 
 + (NSArray *) imageUnfilteredFileTypes {
     return [NSArray arrayWithObjects:

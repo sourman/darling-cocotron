@@ -163,23 +163,39 @@ void O2ColorRelease(O2ColorRef self) {
         CFRelease(self);
 }
 
+static const O2Float kO2NullColorComponents[4] = { 0, 0, 0, 1 };
+
+static BOOL O2ColorPointerIsObject(O2ColorRef self) {
+    return (uintptr_t)self >= 0x1000;
+}
+
 O2ColorSpaceRef O2ColorGetColorSpace(O2ColorRef self) {
+    if (!O2ColorPointerIsObject(self))
+        return NULL;
     return self->_colorSpace;
 }
 
 size_t O2ColorGetNumberOfComponents(O2ColorRef self) {
+    if (!O2ColorPointerIsObject(self))
+        return 4;
     return self->_numberOfComponents;
 }
 
 const O2Float *O2ColorGetComponents(O2ColorRef self) {
+    if (!O2ColorPointerIsObject(self))
+        return kO2NullColorComponents;
     return self->_components;
 }
 
 O2Float O2ColorGetAlpha(O2ColorRef self) {
+    if (!O2ColorPointerIsObject(self))
+        return 1;
     return self->_components[self->_numberOfComponents - 1];
 }
 
 O2PatternRef O2ColorGetPattern(O2ColorRef self) {
+    if (!O2ColorPointerIsObject(self))
+        return NULL;
     return self->_pattern;
 }
 

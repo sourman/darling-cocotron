@@ -125,3 +125,10 @@ target_include_directories(QuartzCore PUBLIC
 target_include_directories(QuartzCore PRIVATE
 	private-include
 )
+
+# Comet dyld compatibility stubs
+if(TARGET QuartzCore_obj)
+  target_sources(QuartzCore_obj PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/comet_stubs.m)
+elseif(TARGET QuartzCore)
+  target_sources(QuartzCore PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/comet_stubs.m)
+endif()

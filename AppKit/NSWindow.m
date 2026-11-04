@@ -18,6 +18,7 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 
+#include <stdio.h>
 #import <AppKit/NSApplication.h>
 #import <AppKit/NSColor.h>
 #import <AppKit/NSCursor.h>
@@ -772,6 +773,8 @@ static BOOL _allowsAutomaticWindowTabbing;
             {NSWindowWillMiniaturizeNotification,
              @selector(windowWillMiniaturize:)},
             {NSWindowWillMoveNotification, @selector(windowWillMove:)},
+            {NSWindowDidChangeOcclusionStateNotification,
+             @selector(windowDidChangeOcclusionState:)},
             {nil, NULL}};
 
     if (_delegate != nil) {
@@ -1110,6 +1113,18 @@ static BOOL _allowsAutomaticWindowTabbing;
     _contentView = view;
 
     [_backgroundView addSubview: _contentView];
+    /*
+     * orderWindow can post occlusion before the host view exists. The
+     * delegate then takes the null-host return and never calls
+     * SetNeedsBeginFrames. Post again once the view is attached.
+     */
+    if (_isVisible) {
+        fprintf(stderr,
+                "NSWindow occlusion repost content view window %p view %p\n",
+                self, view);
+        fflush(stderr);
+        [self postNotificationName: NSWindowDidChangeOcclusionStateNotification];
+    }
 }
 
 - (void) setInitialFirstResponder: (NSView *) view {
@@ -1254,7 +1269,6 @@ static BOOL _allowsAutomaticWindowTabbing;
 }
 
 - (void) setCollectionBehavior: (NSWindowCollectionBehavior) behavior {
-    NSUnimplementedMethod();
 }
 
 - (void) setLevel: (NSInteger) value {
@@ -1417,6 +1431,19 @@ static BOOL _allowsAutomaticWindowTabbing;
     return nil;
 }
 
+- (NSPoint) convertPointFromScreen: (NSPoint) point {
+    return point;
+}
+
+- (void) setAppearance: (NSAppearance *) appearance {
+}
+
+- (void) setTitleVisibility: (NSInteger) visibility {
+}
+
+- (void) setTitlebarAppearsTransparent: (BOOL) transparent {
+}
+
 - (NSButtonCell *) defaultButtonCell {
     return _defaultButtonCell;
 }
@@ -1499,6 +1526,24 @@ static BOOL _allowsAutomaticWindowTabbing;
     return _isVisible;
 }
 
+- (NSWindowOcclusionState) occlusionState {
+    /*
+     * Chromium asks this when the window is shown and sets
+     * ExternalBeginFrameSourceMac::needs_begin_frames_ from the result.
+     * A missing method reads as not visible, so that flag stays 0 and
+     * OnDisplayLinkCallback returns before BeginFrame.
+     */
+    NSWindowOcclusionState state = _isVisible ? NSWindowOcclusionStateVisible : 0;
+    static int logged;
+    if (logged < 4) {
+        logged++;
+        fprintf(stderr, "NSWindow occlusionState %lu visible %d\n",
+                (unsigned long) state, _isVisible);
+        fflush(stderr);
+    }
+    return state;
+}
+
 - (BOOL) isKeyWindow {
     return ([NSApp keyWindow] == self) ? YES : NO;
 }
@@ -1539,7 +1584,6 @@ static BOOL _allowsAutomaticWindowTabbing;
 }
 
 - (NSWindowCollectionBehavior) collectionBehavior {
-    NSUnimplementedMethod();
     return 0;
 }
 
@@ -2209,6 +2253,18 @@ static BOOL _allowsAutomaticWindowTabbing;
     }
 
     [self postNotificationName: NSWindowDidMoveNotification];
+    if (place == NSWindowAbove || place == NSWindowBelow) {
+        id delegate = _delegate;
+        BOOL responds = [delegate respondsToSelector:
+                @selector(windowDidChangeOcclusionState:)];
+        fprintf(stderr,
+                "NSWindow occlusion notify visible %d window %p delegate %s responds %d main %d\n",
+                _isVisible, self,
+                delegate ? [NSStringFromClass([delegate class]) UTF8String] : "(nil)",
+                responds, [NSThread isMainThread]);
+        fflush(stderr);
+        [self postNotificationName: NSWindowDidChangeOcclusionStateNotification];
+    }
 }
 
 - (void) orderFrontRegardless {
