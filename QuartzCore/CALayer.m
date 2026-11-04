@@ -308,17 +308,31 @@ NSString *const kCAContentsFormatGray8Uint = @"Gray8";
 }
 
 - (void) display {
-    if ([_delegate respondsToSelector: @selector(displayLayer:)])
+    if ([_delegate respondsToSelector: @selector(displayLayer:)]) {
         [_delegate displayLayer: self];
-    else {
-#if 0
+        return;
+    }
 
-#warning create bitmap context
+    size_t width = (size_t)CGRectGetWidth(_bounds);
+    size_t height = (size_t)CGRectGetHeight(_bounds);
+    if (width < 1 || height < 1)
+        return;
 
-    [self drawInContext:context];
-    _contents=image;
-    [self setContents:image];
-#endif
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGContextRef context = CGBitmapContextCreate(
+            NULL, width, height, 8, 0, colorSpace,
+            kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Host);
+    CGColorSpaceRelease(colorSpace);
+    if (context == NULL)
+        return;
+
+    [self drawInContext: context];
+
+    CGImageRef image = CGBitmapContextCreateImage(context);
+    CGContextRelease(context);
+    if (image != NULL) {
+        [self setContents: (id)image];
+        CGImageRelease(image);
     }
 }
 
