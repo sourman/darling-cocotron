@@ -733,14 +733,28 @@ static NSData *makeWindowIcon() {
     image->data = NULL;
     XDestroyImage(image);
     XFlush(_display);
-    fprintf(stderr, "X11Window blit %zux%zu\n", width, height);
+    size_t painted = 0;
+    uint32_t firstPixel = 0;
+    const uint8_t *src = bytes;
+    size_t pixels = width * height;
+    for (size_t i = 0; i < pixels; i++) {
+        uint8_t b = src[i * 4];
+        uint8_t g = src[i * 4 + 1];
+        uint8_t r = src[i * 4 + 2];
+        if (r > 12 || g > 12 || b > 12) {
+            if (painted == 0)
+                firstPixel = (uint32_t) b | ((uint32_t) g << 8) |
+                             ((uint32_t) r << 16) | ((uint32_t) src[i * 4 + 3] << 24);
+            painted++;
+        }
+    }
+    fprintf(stderr, "X11Window blit %zux%zu painted %zu first %08x\n", width, height, painted, firstPixel);
     fflush(stderr);
 }
 
 static BOOL X11CopyLayerImage(CALayer *layer, uint8_t *dst, size_t dstW, size_t dstH) {
     id contents = [layer contents];
-    if (contents != nil &&
-        CFGetTypeID((CFTypeRef) contents) == CGImageGetTypeID()) {
+    if ([contents isKindOfClass: [O2Image class]]) {
         CGImageRef image = (CGImageRef) contents;
         size_t width = CGImageGetWidth(image);
         size_t height = CGImageGetHeight(image);
@@ -770,12 +784,23 @@ static BOOL X11CopyLayerImage(CALayer *layer, uint8_t *dst, size_t dstW, size_t 
 - (void) flushBuffer {
     if (_context == nil)
         return;
-    CALayer *layer = [[_delegate contentView] layer];
+    NSView *content = [_delegate contentView];
+    if (content != nil && [content layer] == nil)
+        [content setWantsLayer: YES];
+    CALayer *layer = [content layer];
+    fprintf(stderr, "X11 flush content %s layer %p delegate %s\n",
+            content == nil ? "nil" : class_getName([content class]),
+            layer,
+            layer == nil || [layer delegate] == nil ? "nil" : class_getName([[layer delegate] class]));
+    fflush(stderr);
+    id contents = nil;
     if (layer != nil) {
-        [layer displayIfNeeded];
-        if ([layer contents] == nil)
-            [layer display];
+        [layer display];
+        contents = [layer contents];
     }
+    fprintf(stderr, "X11 flush contents %s\n",
+            contents == nil ? "nil" : class_getName([contents class]));
+    fflush(stderr);
     O2ContextFlush(_context);
     O2Surface *surface = [_context surface];
     if (layer != nil && surface != nil) {

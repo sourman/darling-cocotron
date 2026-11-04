@@ -1863,6 +1863,8 @@ static inline void buildTransformsIfNeeded(NSView *self) {
 
     if (_layer == nil) {
         _layer = [[self makeBackingLayer] retain];
+        if ([_layer delegate] == nil)
+            [_layer setDelegate: self];
         configureLayerGeometry(self);
     }
 

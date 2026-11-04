@@ -6,6 +6,8 @@
 #import <QuartzCore/CALayer.h>
 #import <QuartzCore/CALayerContext.h>
 #import <QuartzCore/CATransaction.h>
+#import <stdio.h>
+#import <objc/runtime.h>
 
 NSString *const kCAFilterLinear = @"linear";
 NSString *const kCAFilterNearest = @"nearest";
@@ -307,6 +309,31 @@ NSString *const kCAContentsFormatGray8Uint = @"Gray8";
     layer->_superlayer = nil;
 }
 
+static size_t CALayerCountPainted(const uint8_t *bytes, size_t width, size_t height,
+                                 size_t bytesPerRow, uint32_t *firstPixel, size_t *firstIndex) {
+    size_t painted = 0;
+    size_t index = 0;
+    *firstPixel = 0;
+    *firstIndex = 0;
+    for (size_t y = 0; y < height; y++) {
+        const uint8_t *row = bytes + y * bytesPerRow;
+        for (size_t x = 0; x < width; x++, index++) {
+            uint8_t b = row[x * 4];
+            uint8_t g = row[x * 4 + 1];
+            uint8_t r = row[x * 4 + 2];
+            if (r > 12 || g > 12 || b > 12) {
+                if (painted == 0) {
+                    *firstPixel = (uint32_t) b | ((uint32_t) g << 8) |
+                                  ((uint32_t) r << 16) | ((uint32_t) row[x * 4 + 3] << 24);
+                    *firstIndex = index;
+                }
+                painted++;
+            }
+        }
+    }
+    return painted;
+}
+
 - (void) display {
     size_t width = (size_t)CGRectGetWidth(_bounds);
     size_t height = (size_t)CGRectGetHeight(_bounds);
@@ -321,7 +348,35 @@ NSString *const kCAContentsFormatGray8Uint = @"Gray8";
     if (context == NULL)
         return;
 
-    [self drawInContext: context];
+    BOOL drew = [_delegate respondsToSelector: @selector(drawLayer:inContext:)];
+    if (drew)
+        [_delegate drawLayer: self inContext: context];
+
+    uint8_t *pixels = CGBitmapContextGetData(context);
+    size_t bytesPerRow = CGBitmapContextGetBytesPerRow(context);
+    uint32_t firstPixel = 0;
+    size_t firstIndex = 0;
+    size_t painted = 0;
+    if (pixels != NULL)
+        painted = CALayerCountPainted(pixels, width, height, bytesPerRow, &firstPixel, &firstIndex);
+    fprintf(stderr,
+            "CALayer display %zux%zu drawInContext %s delegate %s painted %zu first %08x at %zu\n",
+            width, height, drew ? "ran" : "skipped",
+            _delegate == nil ? "nil" : class_getName([_delegate class]),
+            painted, firstPixel, firstIndex);
+    fflush(stderr);
+
+    static __thread int inDelegateDisplay;
+    if (!drew && !inDelegateDisplay &&
+        [_delegate respondsToSelector: @selector(displayLayer:)]) {
+        CGContextRelease(context);
+        inDelegateDisplay = 1;
+        [_delegate displayLayer: self];
+        inDelegateDisplay = 0;
+        fprintf(stderr, "CALayer display called displayLayer:\n");
+        fflush(stderr);
+        return;
+    }
 
     CGImageRef image = CGBitmapContextCreateImage(context);
     CGContextRelease(context);
