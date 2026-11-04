@@ -18,6 +18,7 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 
+#include <stdio.h>
 #import <AppKit/NSApplication.h>
 #import <AppKit/NSColor.h>
 #import <AppKit/NSCursor.h>
@@ -1511,6 +1512,24 @@ static BOOL _allowsAutomaticWindowTabbing;
     return _isVisible;
 }
 
+- (NSWindowOcclusionState) occlusionState {
+    /*
+     * Chromium asks this when the window is shown and sets
+     * ExternalBeginFrameSourceMac::needs_begin_frames_ from the result.
+     * A missing method reads as not visible, so that flag stays 0 and
+     * OnDisplayLinkCallback returns before BeginFrame.
+     */
+    NSWindowOcclusionState state = _isVisible ? NSWindowOcclusionStateVisible : 0;
+    static int logged;
+    if (logged < 4) {
+        logged++;
+        fprintf(stderr, "NSWindow occlusionState %lu visible %d\n",
+                (unsigned long) state, _isVisible);
+        fflush(stderr);
+    }
+    return state;
+}
+
 - (BOOL) isKeyWindow {
     return ([NSApp keyWindow] == self) ? YES : NO;
 }
@@ -2220,6 +2239,11 @@ static BOOL _allowsAutomaticWindowTabbing;
     }
 
     [self postNotificationName: NSWindowDidMoveNotification];
+    if (place == NSWindowAbove || place == NSWindowBelow) {
+        fprintf(stderr, "NSWindow occlusion notify visible %d\n", _isVisible);
+        fflush(stderr);
+        [self postNotificationName: NSWindowDidChangeOcclusionStateNotification];
+    }
 }
 
 - (void) orderFrontRegardless {

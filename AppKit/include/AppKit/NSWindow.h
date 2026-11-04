@@ -118,6 +118,10 @@ typedef NS_ENUM(NSUInteger, NSWindowSharingType) {
     NSWindowSharingReadWrite = 0x02
 };
 
+typedef NS_OPTIONS(NSUInteger, NSWindowOcclusionState) {
+    NSWindowOcclusionStateVisible = 1UL << 1
+};
+
 typedef int NSSelectionDirection;
 
 APPKIT_EXPORT const NSNotificationName NSWindowDidBecomeKeyNotification;
@@ -446,6 +450,7 @@ APPKIT_EXPORT const NSNotificationName NSWindowDidExposeNotification;
 - (BOOL) isDocumentEdited;
 - (BOOL) isZoomed;
 - (BOOL) isVisible;
+- (NSWindowOcclusionState) occlusionState;
 - (BOOL) isKeyWindow;
 - (BOOL) isMainWindow;
 - (BOOL) isMiniaturized;
