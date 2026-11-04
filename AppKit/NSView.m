@@ -43,7 +43,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 #import <CoreGraphics/CGWindow.h>
 #import <Foundation/NSKeyedArchiver.h>
 #import <Onyx2D/O2Context.h>
+#import <Onyx2D/O2Image.h>
 #import <QuartzCore/CALayerContext.h>
+#import <objc/runtime.h>
+#import <stdio.h>
+#import <string.h>
 #import <QuartzCore/CATransaction.h>
 #import <AppKit/NSLayoutConstraint.h>
 
@@ -2888,6 +2892,81 @@ static NSView *viewBeingPrinted = nil;
 - (void)displayLayer: (CALayer*)layer
 {
     [self display];
+}
+
+- (void) drawLayer: (CALayer *) layer inContext: (CGContextRef) cgContext {
+    static __thread int drawingLayer;
+    if (drawingLayer || ![self canDraw])
+        return;
+    drawingLayer = 1;
+
+    NSGraphicsContext *context =
+            [NSGraphicsContext graphicsContextWithGraphicsPort: cgContext
+                                                       flipped: [self isFlipped]];
+    if ([self lockFocusIfCanDrawInContext: context]) {
+        CGContextSetCTM(cgContext, CGAffineTransformIdentity);
+        fprintf(stderr, "NSView drawLayer %s bounds %.0fx%.0f subviews %u\n",
+                class_getName([self class]), [self bounds].size.width, [self bounds].size.height,
+                (unsigned) [_subviews count]);
+        fflush(stderr);
+        [self drawRect: [self bounds]];
+
+        NSEnumerator *viewEnumerator = [self _subviewsInDisplayOrderEnumerator];
+        NSView *child = nil;
+        while ((child = [viewEnumerator nextObject])) {
+            if ([child isHidden] || ![child canDraw])
+                continue;
+            fprintf(stderr, "NSView drawLayer child %s %.0fx%.0f\n",
+                    class_getName([child class]), [child bounds].size.width, [child bounds].size.height);
+            fflush(stderr);
+            if (strcmp(class_getName([child class]), "ViewsCompositorSuperview") == 0) {
+                id compContents = [[child layer] contents];
+                if ([compContents isKindOfClass: [O2Image class]]) {
+                    CGImageRef image = (CGImageRef) compContents;
+                    size_t width = CGImageGetWidth(image);
+                    size_t height = CGImageGetHeight(image);
+                    CFDataRef data = CGDataProviderCopyData(CGImageGetDataProvider(image));
+                    size_t page = 0;
+                    uint32_t first = 0;
+                    if (data != NULL) {
+                        size_t bpr = CGImageGetBytesPerRow(image);
+                        const uint8_t *src = CFDataGetBytePtr(data);
+                        if (src != NULL && bpr >= width * 4) {
+                            for (size_t y = 0; y < height; y++) {
+                                const uint8_t *row = src + y * bpr;
+                                for (size_t x = 0; x < width; x++) {
+                                    const uint8_t *p = row + x * 4;
+                                    BOOL black = p[0] <= 12 && p[1] <= 12 && p[2] <= 12;
+                                    BOOL gray = p[0] == 0xed && p[1] == 0xed && p[2] == 0xed;
+                                    if (!black && !gray) {
+                                        if (page == 0)
+                                            first = (uint32_t) p[0] | ((uint32_t) p[1] << 8) |
+                                                    ((uint32_t) p[2] << 16) | ((uint32_t) p[3] << 24);
+                                        page++;
+                                    }
+                                }
+                            }
+                        }
+                        CFRelease(data);
+                    }
+                    fprintf(stderr, "compositor image %zux%zu page %zu first %08x\n",
+                            width, height, page, first);
+                    fflush(stderr);
+                }
+            }
+            CGContextSaveGState(cgContext);
+            NSRect frame = [child frame];
+            CGContextTranslateCTM(cgContext, frame.origin.x, frame.origin.y);
+            [child drawRect: [child bounds]];
+            CGContextRestoreGState(cgContext);
+        }
+
+        CGContextRestoreGState(cgContext);
+        [[context focusStack] removeLastObject];
+        [NSGraphicsContext restoreGraphicsState];
+    }
+
+    drawingLayer = 0;
 }
 
 + (IBMetricsTable *) ibLayoutMetrics {

@@ -734,21 +734,32 @@ static NSData *makeWindowIcon() {
     XDestroyImage(image);
     XFlush(_display);
     size_t painted = 0;
+    size_t pagePixels = 0;
     uint32_t firstPixel = 0;
+    uint32_t firstPage = 0;
     const uint8_t *src = bytes;
     size_t pixels = width * height;
     for (size_t i = 0; i < pixels; i++) {
         uint8_t b = src[i * 4];
         uint8_t g = src[i * 4 + 1];
         uint8_t r = src[i * 4 + 2];
-        if (r > 12 || g > 12 || b > 12) {
+        BOOL black = r <= 12 && g <= 12 && b <= 12;
+        BOOL gray = r == 0xed && g == 0xed && b == 0xed;
+        if (!black) {
             if (painted == 0)
                 firstPixel = (uint32_t) b | ((uint32_t) g << 8) |
                              ((uint32_t) r << 16) | ((uint32_t) src[i * 4 + 3] << 24);
             painted++;
         }
+        if (!black && !gray) {
+            if (pagePixels == 0)
+                firstPage = (uint32_t) b | ((uint32_t) g << 8) |
+                            ((uint32_t) r << 16) | ((uint32_t) src[i * 4 + 3] << 24);
+            pagePixels++;
+        }
     }
-    fprintf(stderr, "X11Window blit %zux%zu painted %zu first %08x\n", width, height, painted, firstPixel);
+    fprintf(stderr, "X11Window blit %zux%zu painted %zu first %08x page %zu firstPage %08x\n",
+            width, height, painted, firstPixel, pagePixels, firstPage);
     fflush(stderr);
 }
 
@@ -758,15 +769,28 @@ static BOOL X11CopyLayerImage(CALayer *layer, uint8_t *dst, size_t dstW, size_t 
         CGImageRef image = (CGImageRef) contents;
         size_t width = CGImageGetWidth(image);
         size_t height = CGImageGetHeight(image);
-        if (width == dstW && height == dstH) {
+        if (width == dstW && height > 0 && height <= dstH) {
             CFDataRef data = CGDataProviderCopyData(CGImageGetDataProvider(image));
             if (data != NULL) {
-                size_t row = dstW * 4;
+                size_t row = width * 4;
                 size_t bytesPerRow = CGImageGetBytesPerRow(image);
                 const uint8_t *src = CFDataGetBytePtr(data);
+                BOOL hasPagePixel = NO;
                 if (src != NULL && bytesPerRow >= row) {
+                    for (size_t i = 0; i < width * height && !hasPagePixel; i++) {
+                        size_t y = i / width;
+                        size_t x = i % width;
+                        const uint8_t *p = src + y * bytesPerRow + x * 4;
+                        BOOL gray = p[0] == 0xed && p[1] == 0xed && p[2] == 0xed;
+                        BOOL black = p[0] <= 12 && p[1] <= 12 && p[2] <= 12;
+                        if (!gray && !black)
+                            hasPagePixel = YES;
+                    }
+                }
+                if (hasPagePixel) {
+                    size_t y0 = dstH - height;
                     for (size_t y = 0; y < height; y++)
-                        memcpy(dst + y * row, src + y * bytesPerRow, row);
+                        memcpy(dst + (y0 + y) * dstW * 4, src + y * bytesPerRow, row);
                     CFRelease(data);
                     return YES;
                 }
@@ -779,6 +803,17 @@ static BOOL X11CopyLayerImage(CALayer *layer, uint8_t *dst, size_t dstW, size_t 
             return YES;
     }
     return NO;
+}
+
+static void X11CopyViewTree(NSView *view, uint8_t *dst, size_t dstW, size_t dstH) {
+    if (view == nil)
+        return;
+    CALayer *layer = [view layer];
+    if (layer != nil && X11CopyLayerImage(layer, dst, dstW, dstH))
+        return;
+    for (NSView *subview in [view subviews]) {
+        X11CopyViewTree(subview, dst, dstW, dstH);
+    }
 }
 
 - (void) flushBuffer {
@@ -808,7 +843,7 @@ static BOOL X11CopyLayerImage(CALayer *layer, uint8_t *dst, size_t dstW, size_t 
         size_t width = O2ImageGetWidth(surface);
         size_t height = O2ImageGetHeight(surface);
         if (bytes != NULL && width > 0 && height > 0)
-            X11CopyLayerImage(layer, bytes, width, height);
+            X11CopyViewTree(content, bytes, width, height);
     }
     [self blitBackingStore];
     [self openGLFlushBuffer];
