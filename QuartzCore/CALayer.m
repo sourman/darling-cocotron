@@ -380,8 +380,16 @@ static size_t CALayerCountPainted(const uint8_t *bytes, size_t width, size_t hei
 
     CGImageRef image = CGBitmapContextCreateImage(context);
     CGContextRelease(context);
-    if (image != NULL) {
+    /*
+     * Chromium's compositor layer already has an IOSurface (or a previous
+     * frame) as contents. drawLayer:inContext: paints nothing into this
+     * fresh bitmap. Replacing contents with that bitmap is what leaves
+     * the present all zeros.
+     */
+    if (image != NULL && (painted > 0 || _contents == nil)) {
         [self setContents: (id)image];
+        CGImageRelease(image);
+    } else if (image != NULL) {
         CGImageRelease(image);
     }
 }

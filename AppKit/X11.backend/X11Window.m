@@ -779,8 +779,6 @@ static void X11LogRendererLayer(NSView *view) {
         id contents = nil;
         size_t frameW = 0;
         size_t frameH = 0;
-        if (layer != nil)
-            [layer display];
         contents = [layer contents];
         frameW = 0;
         frameH = 0;
@@ -812,6 +810,13 @@ static BOOL X11CopyLayerImage(CALayer *layer, uint8_t *dst, size_t dstW, size_t 
         size_t copyW = width < dstW ? width : dstW;
         size_t copyH = height < dstH ? height : dstH;
         if (src != NULL && bytesPerRow >= copyW * 4 && copyW > 0 && copyH > 0) {
+            static int surfaceLogs;
+            if (surfaceLogs < 4) {
+                surfaceLogs++;
+                fprintf(stderr, "IOSurface present %zux%zu first %02x%02x%02x%02x\n",
+                        width, height, src[0], src[1], src[2], src[3]);
+                fflush(stderr);
+            }
             BOOL hasPagePixel = NO;
             for (size_t i = 0; i < copyW * copyH && !hasPagePixel; i++) {
                 size_t y = i / copyW;
