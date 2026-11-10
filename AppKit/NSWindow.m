@@ -486,12 +486,30 @@ static BOOL _allowsAutomaticWindowTabbing;
 - (void) _setBeginFramesForShownWindow {
     if (!_isVisible)
         return;
-    fprintf(stderr, "NSWindow begin-frames store window %p\n", self);
+    /*
+     * windowDidChangeOcclusionState: only checks the active space.
+     * OnNeedsBeginFrames is reached from onWindowOrderChanged: ->
+     * OnVisibilityChanged, and only when isVisible actually changes.
+     */
+    id delegate = _delegate;
+    SEL orderChanged = @selector(onWindowOrderChanged:);
+    BOOL responds = [delegate respondsToSelector: orderChanged];
+    fprintf(stderr,
+            "NSWindow onWindowOrderChanged window %p delegate %s responds %d\n",
+            self,
+            delegate ? [NSStringFromClass([delegate class]) UTF8String] : "(nil)",
+            responds);
     fflush(stderr);
+    if (!responds)
+        return;
     _isVisible = NO;
-    [self _deliverOcclusionState];
+    [delegate performSelector: orderChanged withObject: nil];
+    fprintf(stderr, "NSWindow OnVisibilityChanged visible 0\n");
+    fflush(stderr);
     _isVisible = YES;
-    [self _deliverOcclusionState];
+    [delegate performSelector: orderChanged withObject: nil];
+    fprintf(stderr, "NSWindow OnVisibilityChanged visible 1\n");
+    fflush(stderr);
 }
 
 - (void) postNotificationName: (NSNotificationName) name {
@@ -2312,13 +2330,7 @@ static BOOL _allowsAutomaticWindowTabbing;
         [self _deliverOcclusionState];
         [self performSelector: @selector(_setBeginFramesForShownWindow)
                    withObject: nil
-                   afterDelay: 0];
-        [self performSelector: @selector(_setBeginFramesForShownWindow)
-                   withObject: nil
-                   afterDelay: 0.5];
-        [self performSelector: @selector(_setBeginFramesForShownWindow)
-                   withObject: nil
-                   afterDelay: 1.5];
+                   afterDelay: 2];
     }
 }
 
