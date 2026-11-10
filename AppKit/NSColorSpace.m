@@ -29,9 +29,12 @@ NSString *const _NSColorCoreUICatalogNamePrefix =
 @implementation NSColorSpace
 
 + (NSColorSpace *) sRGBColorSpace {
-    CGColorSpaceRef srgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-    NSColorSpace *colorSpace =
-            [[[self alloc] initWithCGColorSpace: srgb] autorelease];
+    static NSColorSpace *colorSpace;
+    if (colorSpace == nil) {
+        CGColorSpaceRef srgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+        colorSpace = [[self alloc] initWithCGColorSpace: srgb];
+        CGColorSpaceRelease(srgb);
+    }
     return colorSpace;
 }
 
@@ -57,6 +60,18 @@ NSString *const _NSColorCoreUICatalogNamePrefix =
 
 - (CGColorSpaceRef) CGColorSpace {
     return _cgColorSpace;
+}
+
+- (NSInteger) colorSpaceModel {
+    return 1; // NSRGBColorSpaceModel
+}
+
+- (NSInteger) numberOfColorComponents {
+    return 3;
+}
+
+- (NSString *) localizedName {
+    return @"sRGB IEC61966-2.1";
 }
 
 @end

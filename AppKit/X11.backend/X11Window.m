@@ -31,13 +31,35 @@
 #import <Onyx2D/O2Context_builtin_FT.h>
 #import <Onyx2D/O2ImageSource.h>
 #import <Onyx2D/O2Surface.h>
+#import <QuartzCore/CALayer.h>
 #import <QuartzCore/CAWindowOpenGLContext.h>
+#import <CoreGraphics/CGImage.h>
+#import <string.h>
 
 #import "X11Display.h"
 #import "X11SubWindow.h"
 #import "X11Window.h"
+#import <objc/runtime.h>
+#import <stdio.h>
+#import <unistd.h>
+
+static int createError;
+
+static int x11CreateWindowError(Display *display, XErrorEvent *event) {
+    createError = event->error_code;
+    dprintf(2, "X11Create BadValue probe req=%d err=%d\n",
+            event->request_code, event->error_code);
+    return 0;
+}
 #import <X11/Xatom.h>
 #import <X11/Xutil.h>
+
+@interface DarlingIOSurface : NSObject
+- (void *) baseAddress;
+- (NSInteger) width;
+- (NSInteger) height;
+- (NSInteger) bytesPerRow;
+@end
 
 @implementation X11Window
 
@@ -159,7 +181,23 @@ static NSData *makeWindowIcon() {
     _display = [x11disp display];
 
     _frame = [self transformFrame: [delegate frame]];
+    fprintf(stderr,
+            "X11Window content-in-frame %g,%g %gx%g delegate %s\n",
+            _frame.origin.x, _frame.origin.y, _frame.size.width,
+            _frame.size.height, class_getName([delegate class]));
     BOOL isPanel = [delegate isKindOfClass: [NSPanel class]];
+    if (!isPanel &&
+        (_frame.size.width < 800 || _frame.size.height < 600)) {
+        _frame.size.width = 800;
+        _frame.size.height = 600;
+        if (_frame.origin.x < 0 || _frame.origin.x > 1600)
+            _frame.origin.x = 80;
+        if (_frame.origin.y < 0 || _frame.origin.y > 1000)
+            _frame.origin.y = 80;
+        fprintf(stderr, "X11Window expanded frame to %g,%g %gx%g\n",
+                _frame.origin.x, _frame.origin.y, _frame.size.width,
+                _frame.size.height);
+    }
     if (isPanel && _styleMask & NSDocModalWindowMask)
         _styleMask = NSBorderlessWindowMask;
     // TODO: get rid of these glX calls
@@ -198,13 +236,51 @@ static NSData *makeWindowIcon() {
     xattr_mask = CWOverrideRedirect | CWColormap;
     xattr.colormap = cmap;
 
-    _window = XCreateWindow(
-            _display, DefaultRootWindow(_display), _frame.origin.x,
-            _frame.origin.y, _frame.size.width, _frame.size.height, 0,
-            (_visualInfo == NULL) ? CopyFromParent : _visualInfo->depth,
-            InputOutput,
-            (_visualInfo == NULL) ? CopyFromParent : _visualInfo->visual,
-            xattr_mask, &xattr);
+    // Isolate the BadValue. The server accepts the parent visual at the
+    // screen depth; it rejects the GLX visual (same class and depth, so
+    // the visual id itself is the bad argument).
+    int (*previous)(Display *, XErrorEvent *) =
+            XSetErrorHandler(x11CreateWindowError);
+    unsigned width = (unsigned) _frame.size.width;
+    unsigned height = (unsigned) _frame.size.height;
+    if (width < 1)
+        width = 1;
+    if (height < 1)
+        height = 1;
+    Visual *defaultVisual = DefaultVisual(_display, screen);
+    int defaultDepth = DefaultDepth(_display, screen);
+    dprintf(2,
+            "X11Window size %ux%u glx vis=%lu depth=%d class=%d default vis=%lu depth=%d\n",
+            width, height,
+            _visualInfo ? _visualInfo->visualid : 0,
+            _visualInfo ? _visualInfo->depth : -1,
+            _visualInfo ? _visualInfo->class : -1,
+            defaultVisual->visualid, defaultDepth);
+
+    createError = 0;
+    if (_visualInfo != NULL) {
+        _window = XCreateWindow(
+                _display, DefaultRootWindow(_display), (int) _frame.origin.x,
+                (int) _frame.origin.y, width, height, 0, _visualInfo->depth,
+                InputOutput, _visualInfo->visual, xattr_mask, &xattr);
+        XSync(_display, False);
+        dprintf(2, "X11Window glx visual err=%d\n", createError);
+    }
+    if (_visualInfo == NULL || createError != 0) {
+        createError = 0;
+        XSetWindowAttributes parentAttr;
+        parentAttr.override_redirect = xattr.override_redirect;
+        parentAttr.colormap = DefaultColormap(_display, screen);
+        _window = XCreateWindow(
+                _display, DefaultRootWindow(_display), (int) _frame.origin.x,
+                (int) _frame.origin.y, width, height, 0, defaultDepth,
+                InputOutput, defaultVisual, CWOverrideRedirect | CWColormap,
+                &parentAttr);
+        XSync(_display, False);
+        dprintf(2, "X11Window default visual err=%d\n", createError);
+        _visualInfo = NULL;
+    }
+    XSetErrorHandler(previous);
 
     [self syncDelegateProperties];
 
@@ -217,7 +293,7 @@ static NSData *makeWindowIcon() {
                             .res_class = (char *) name};
     XSetClassHint(_display, _window, &classHint);
 
-    XSetWindowBackgroundPixmap(_display, _window, None);
+    XSetWindowBackground(_display, _window, BlackPixel(_display, screen));
 
     _isModal = [delegate isSheet] || [NSApp modalWindow] == delegate;
     // FIXME: There should be no need for this.
@@ -265,6 +341,9 @@ static NSData *makeWindowIcon() {
     [self setStyleMaskInternal: _styleMask force: YES];
 
     [self setWindowIcon];
+
+    if (!isPanel)
+        [self ensureMapped];
 
     return self;
 }
@@ -637,10 +716,207 @@ static NSData *makeWindowIcon() {
     CGLSetCurrentContext(prevContext);
 }
 
+- (void) blitBackingStore {
+    if (_context == nil || _window == 0 || _display == NULL)
+        return;
+    O2Surface *surface = [_context surface];
+    if (surface == nil)
+        return;
+    size_t width = O2ImageGetWidth(surface);
+    size_t height = O2ImageGetHeight(surface);
+    void *bytes = [surface pixelBytes];
+    if (width < 1 || height < 1 || bytes == NULL)
+        return;
+    Visual *visual = (_visualInfo != NULL) ? _visualInfo->visual
+                                           : DefaultVisual(_display, DefaultScreen(_display));
+    int depth = (_visualInfo != NULL) ? _visualInfo->depth
+                                      : DefaultDepth(_display, DefaultScreen(_display));
+    XImage *image = XCreateImage(_display, visual, depth, ZPixmap, 0,
+                                 (char *) bytes, width, height, 32, (int) width * 4);
+    if (image == NULL)
+        return;
+    GC gc = XCreateGC(_display, _window, 0, NULL);
+    XPutImage(_display, _window, gc, image, 0, 0, 0, 0, width, height);
+    XFreeGC(_display, gc);
+    image->data = NULL;
+    XDestroyImage(image);
+    XFlush(_display);
+    size_t painted = 0;
+    size_t pagePixels = 0;
+    uint32_t firstPixel = 0;
+    uint32_t firstPage = 0;
+    const uint8_t *src = bytes;
+    size_t pixels = width * height;
+    for (size_t i = 0; i < pixels; i++) {
+        uint8_t b = src[i * 4];
+        uint8_t g = src[i * 4 + 1];
+        uint8_t r = src[i * 4 + 2];
+        BOOL black = r <= 12 && g <= 12 && b <= 12;
+        BOOL gray = r == 0xed && g == 0xed && b == 0xed;
+        if (!black) {
+            if (painted == 0)
+                firstPixel = (uint32_t) b | ((uint32_t) g << 8) |
+                             ((uint32_t) r << 16) | ((uint32_t) src[i * 4 + 3] << 24);
+            painted++;
+        }
+        if (!black && !gray) {
+            if (pagePixels == 0)
+                firstPage = (uint32_t) b | ((uint32_t) g << 8) |
+                            ((uint32_t) r << 16) | ((uint32_t) src[i * 4 + 3] << 24);
+            pagePixels++;
+        }
+    }
+    fprintf(stderr, "X11Window blit %zux%zu painted %zu first %08x page %zu firstPage %08x\n",
+            width, height, painted, firstPixel, pagePixels, firstPage);
+    fflush(stderr);
+}
+
+static void X11LogRendererLayer(NSView *view) {
+    if (view == nil)
+        return;
+    if (strcmp(class_getName([view class]), "RenderWidgetHostViewCocoa") == 0) {
+        static int logged;
+        CALayer *layer = [view layer];
+        id contents = nil;
+        size_t frameW = 0;
+        size_t frameH = 0;
+        if (layer != nil)
+            [layer display];
+        contents = [layer contents];
+        frameW = 0;
+        frameH = 0;
+        if ([contents isKindOfClass: [O2Image class]]) {
+            frameW = CGImageGetWidth((CGImageRef) contents);
+            frameH = CGImageGetHeight((CGImageRef) contents);
+        }
+        if (!logged) {
+            logged = 1;
+            fprintf(stderr,
+                    "RWHV blit contents %p frame %zux%zu\n",
+                    contents, frameW, frameH);
+            fflush(stderr);
+        }
+    }
+    for (NSView *subview in [view subviews])
+        X11LogRendererLayer(subview);
+}
+
+static BOOL X11CopyLayerImage(CALayer *layer, uint8_t *dst, size_t dstW, size_t dstH) {
+    id contents = [layer contents];
+    if (contents != nil &&
+        strcmp(class_getName([contents class]), "IOSurface") == 0) {
+        DarlingIOSurface *surface = contents;
+        const uint8_t *src = [surface baseAddress];
+        size_t width = (size_t) [surface width];
+        size_t height = (size_t) [surface height];
+        size_t bytesPerRow = (size_t) [surface bytesPerRow];
+        size_t copyW = width < dstW ? width : dstW;
+        size_t copyH = height < dstH ? height : dstH;
+        if (src != NULL && bytesPerRow >= copyW * 4 && copyW > 0 && copyH > 0) {
+            BOOL hasPagePixel = NO;
+            for (size_t i = 0; i < copyW * copyH && !hasPagePixel; i++) {
+                size_t y = i / copyW;
+                size_t x = i % copyW;
+                const uint8_t *p = src + y * bytesPerRow + x * 4;
+                BOOL gray = p[0] == 0xed && p[1] == 0xed && p[2] == 0xed;
+                BOOL black = p[0] <= 12 && p[1] <= 12 && p[2] <= 12;
+                if (!gray && !black)
+                    hasPagePixel = YES;
+            }
+            if (hasPagePixel) {
+                size_t y0 = dstH - copyH;
+                for (size_t y = 0; y < copyH; y++)
+                    memcpy(dst + (y0 + y) * dstW * 4, src + y * bytesPerRow, copyW * 4);
+                return YES;
+            }
+        }
+    }
+    if ([contents isKindOfClass: [O2Image class]]) {
+        CGImageRef image = (CGImageRef) contents;
+        size_t width = CGImageGetWidth(image);
+        size_t height = CGImageGetHeight(image);
+        size_t copyW = width < dstW ? width : dstW;
+        size_t copyH = height < dstH ? height : dstH;
+        if (copyW > 0 && copyH > 0) {
+            CFDataRef data = CGDataProviderCopyData(CGImageGetDataProvider(image));
+            if (data != NULL) {
+                size_t row = width * 4;
+                size_t bytesPerRow = CGImageGetBytesPerRow(image);
+                const uint8_t *src = CFDataGetBytePtr(data);
+                BOOL hasPagePixel = NO;
+                if (src != NULL && bytesPerRow >= row) {
+                    for (size_t i = 0; i < width * height && !hasPagePixel; i++) {
+                        size_t y = i / width;
+                        size_t x = i % width;
+                        const uint8_t *p = src + y * bytesPerRow + x * 4;
+                        BOOL gray = p[0] == 0xed && p[1] == 0xed && p[2] == 0xed;
+                        BOOL black = p[0] <= 12 && p[1] <= 12 && p[2] <= 12;
+                        if (!gray && !black)
+                            hasPagePixel = YES;
+                    }
+                }
+                if (hasPagePixel) {
+                    size_t y0 = dstH - copyH;
+                    size_t copyRow = copyW * 4;
+                    for (size_t y = 0; y < copyH; y++)
+                        memcpy(dst + (y0 + y) * dstW * 4, src + y * bytesPerRow, copyRow);
+                    CFRelease(data);
+                    return YES;
+                }
+                CFRelease(data);
+            }
+        }
+    }
+    for (CALayer *sublayer in [layer sublayers]) {
+        if (X11CopyLayerImage(sublayer, dst, dstW, dstH))
+            return YES;
+    }
+    return NO;
+}
+
+static void X11CopyViewTree(NSView *view, uint8_t *dst, size_t dstW, size_t dstH) {
+    if (view == nil)
+        return;
+    CALayer *layer = [view layer];
+    if (layer != nil && X11CopyLayerImage(layer, dst, dstW, dstH))
+        return;
+    for (NSView *subview in [view subviews]) {
+        X11CopyViewTree(subview, dst, dstW, dstH);
+    }
+}
+
 - (void) flushBuffer {
     if (_context == nil)
         return;
+    NSView *content = [_delegate contentView];
+    if (content != nil && [content layer] == nil)
+        [content setWantsLayer: YES];
+    CALayer *layer = [content layer];
+    fprintf(stderr, "X11 flush content %s layer %p delegate %s\n",
+            content == nil ? "nil" : class_getName([content class]),
+            layer,
+            layer == nil || [layer delegate] == nil ? "nil" : class_getName([[layer delegate] class]));
+    fflush(stderr);
+    id contents = nil;
+    if (layer != nil) {
+        [layer display];
+        contents = [layer contents];
+    }
+    fprintf(stderr, "X11 flush contents %s\n",
+            contents == nil ? "nil" : class_getName([contents class]));
+    fflush(stderr);
     O2ContextFlush(_context);
+    O2Surface *surface = [_context surface];
+    if (layer != nil && surface != nil) {
+        void *bytes = [surface pixelBytes];
+        size_t width = O2ImageGetWidth(surface);
+        size_t height = O2ImageGetHeight(surface);
+        if (bytes != NULL && width > 0 && height > 0) {
+            X11LogRendererLayer(content);
+            X11CopyViewTree(content, bytes, width, height);
+        }
+    }
+    [self blitBackingStore];
     [self openGLFlushBuffer];
 }
 

@@ -270,6 +270,14 @@
     NSUnimplementedMethod();
 }
 
+- (NSURL *) URLForApplicationToOpenURL: (NSURL *) url {
+    return nil;
+}
+
+- (NSNumber *) voiceOverEnabled {
+    return [NSNumber numberWithBool: NO];
+}
+
 - (NSURL *) URLForApplicationWithBundleIdentifier: (NSString *) bundleIdentifier
 {
     CFURLRef url;

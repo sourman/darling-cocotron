@@ -319,6 +319,11 @@ NSNotificationName const NSSystemColorsDidChangeNotification = @"NSSystemColorsD
     return [NSColor colorWithCatalogName: @"System" colorName: @"controlColor"];
 }
 
++ (NSColor *) controlAccentColor {
+    return [NSColor colorWithCatalogName: @"System"
+                                colorName: @"controlAccentColor"];
+}
+
 + (NSColor *) selectedControlColor {
     return [NSColor colorWithCatalogName: @"System"
                                colorName: @"selectedControlColor"];
@@ -902,6 +907,10 @@ static void releasePatternInfo(void *info) {
     if (alpha >= 1.0)
         return self;
     return nil;
+}
+
+- (NSColor *) colorUsingColorSpace: (id) space {
+    return self;
 }
 
 - (NSColor *) colorUsingColorSpaceName: (NSColorSpaceName) colorSpace {

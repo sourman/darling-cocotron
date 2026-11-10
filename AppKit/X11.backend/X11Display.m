@@ -19,6 +19,7 @@
  SOFTWARE. */
 
 #import "X11Display.h"
+#import <stdio.h>
 #import "NSEvent_mouse.h"
 #import "X11Cursor.h"
 #import "X11Pasteboard.h"
@@ -213,58 +214,74 @@ static void socketCallback(CFSocketRef s, CFSocketCallBackType type,
         for (int i = 0; i < screen->noutput; i++) {
             XRROutputInfo *oinfo =
                     XRRGetOutputInfo(_display, screen, screen->outputs[i]);
-            NSScreen *nsscreen;
+            NSScreen *nsscreen = nil;
 
-            if (oinfo->crtc) {
+            if (oinfo != NULL && oinfo->crtc &&
+                oinfo->connection != RR_Disconnected) {
                 XRRCrtcInfo *crtc =
                         XRRGetCrtcInfo(_display, screen, oinfo->crtc);
-                NSRect frame =
-                        NSMakeRect(crtc->x, crtc->y, crtc->width, crtc->height);
+                if (crtc != NULL && crtc->width > 0 && crtc->height > 0) {
+                    NSRect frame = NSMakeRect(crtc->x, crtc->y, crtc->width,
+                                              crtc->height);
 
-                nsscreen =
-                        [[[NSScreen alloc] initWithFrame: frame
-                                            visibleFrame: frame] autorelease];
+                    nsscreen = [[[NSScreen alloc] initWithFrame: frame
+                                                   visibleFrame: frame]
+                            autorelease];
 
-                Atom actualType;
-                unsigned long nitems, bytesAfter;
-                int actualFormat;
-                unsigned char *prop;
+                    Atom actualType;
+                    unsigned long nitems, bytesAfter;
+                    int actualFormat;
+                    unsigned char *prop;
 
-                if (XRRGetOutputProperty(_display, screen->outputs[i], edidAtom,
-                                         0, 100, FALSE, FALSE, AnyPropertyType,
-                                         &actualType, &actualFormat, &nitems,
-                                         &bytesAfter, &prop) == Success) {
-                    if (prop && nitems > 0)
-                        [nsscreen setEdid: [NSData dataWithBytes: prop
-                                                          length: nitems]];
+                    if (XRRGetOutputProperty(
+                                _display, screen->outputs[i], edidAtom, 0, 100,
+                                FALSE, FALSE, AnyPropertyType, &actualType,
+                                &actualFormat, &nitems, &bytesAfter,
+                                &prop) == Success) {
+                        if (prop && nitems > 0)
+                            [nsscreen setEdid: [NSData dataWithBytes: prop
+                                                              length: nitems]];
+                    }
+                    [nsscreen setCgDirectDisplayID: (i + 1)];
+                    [retval addObject: nsscreen];
                 }
-
-                XRRFreeCrtcInfo(crtc);
-            } else {
-                nsscreen = [[[NSScreen alloc] initWithFrame: NSZeroRect
-                                               visibleFrame: NSZeroRect]
-                        autorelease];
+                if (crtc != NULL)
+                    XRRFreeCrtcInfo(crtc);
             }
-            [nsscreen setCgDirectDisplayID: (i + 1)];
-
-            [retval addObject: nsscreen];
-
-            XRRFreeOutputInfo(oinfo);
+            if (oinfo != NULL)
+                XRRFreeOutputInfo(oinfo);
         }
 
         XRRFreeScreenResources(screen);
 
+        if ([retval count] == 0) {
+            NSRect frame = NSMakeRect(
+                    0, 0, DisplayWidth(_display, DefaultScreen(_display)),
+                    DisplayHeight(_display, DefaultScreen(_display)));
+            [retval addObject: [[[NSScreen alloc] initWithFrame: frame
+                                                   visibleFrame: frame]
+                                       autorelease]];
+        }
+
         NSArray* array = [NSArray arrayWithArray: retval];
+        for (NSScreen *screen in array) {
+            NSRect frame = [screen frame];
+            fprintf(stderr, "NSScreen frame %g,%g %gx%g\n",
+                    frame.origin.x, frame.origin.y, frame.size.width,
+                    frame.size.height);
+        }
         _lastScreens = [array retain];
         return array;
     } else {
         NSRect frame = NSMakeRect(
                 0, 0, DisplayWidth(_display, DefaultScreen(_display)),
                 DisplayHeight(_display, DefaultScreen(_display)));
-        return [NSArray
+        NSArray *array = [NSArray
                 arrayWithObject: [[[NSScreen alloc] initWithFrame: frame
                                                      visibleFrame: frame]
                                          autorelease]];
+        _lastScreens = [array retain];
+        return array;
     }
 }
 

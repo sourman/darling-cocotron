@@ -118,6 +118,13 @@ NSColor *NSColorGetCatalogColor(NSColorListName catalogName,
     return nil;
 }
 
+- (NSColor *) colorUsingColorSpace: (id) space {
+    (void)space;
+    if (_color != nil)
+        return _color;
+    return self;
+}
+
 - (NSColor *) colorUsingColorSpaceName: (NSColorSpaceName) colorSpace {
     return [self colorUsingColorSpaceName: colorSpace device: nil];
 }

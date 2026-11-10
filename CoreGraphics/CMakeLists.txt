@@ -169,3 +169,10 @@ function(add_backend name)
 endfunction(add_backend)
 
 add_subdirectory(X11.backend)
+
+# Comet dyld compatibility stubs
+if(TARGET CoreGraphics_obj)
+  target_sources(CoreGraphics_obj PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/comet_stubs.m)
+elseif(TARGET CoreGraphics)
+  target_sources(CoreGraphics PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/comet_stubs.m)
+endif()

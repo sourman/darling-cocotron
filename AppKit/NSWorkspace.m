@@ -308,6 +308,26 @@ NSNotificationName NSWorkspaceWillUnmountNotification = @"NSWorkspaceWillUnmount
     return nil;
 }
 
+- (BOOL) accessibilityDisplayShouldIncreaseContrast {
+    return NO;
+}
+
+- (BOOL) accessibilityDisplayShouldDifferentiateWithoutColor {
+    return NO;
+}
+
+- (BOOL) accessibilityDisplayShouldReduceTransparency {
+    return NO;
+}
+
+- (BOOL) accessibilityDisplayShouldReduceMotion {
+    return NO;
+}
+
+- (BOOL) accessibilityDisplayShouldInvertColors {
+    return NO;
+}
+
 @end
 
 @implementation NSWorkspace (CocotronAdditions)

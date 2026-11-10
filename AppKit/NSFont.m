@@ -484,20 +484,25 @@ static NSLock *_cacheLock = nil;
 
 + (NSFont *) fontWithName: (NSString *) name size: (CGFloat) size {
     NSFont *result;
+    static NSString *fallbackName = @"FKGroteskNeue-Regular";
 
-    if (name == nil)
-        [NSException raise: NSInvalidArgumentException
-                    format: @"-[%@ %s] name==nil", self, sel_getName(_cmd)];
+    if (name == nil || [name length] == 0)
+        name = fallbackName;
 
     // Name can be PS name or a display name - internally we want a PS name -
     // that's what Cocoa is doing
     name = [O2Font postscriptNameForFontName: name];
+    if (name == nil || [name length] == 0)
+        name = fallbackName;
 
     result = [self cachedFontWithName: name size: size];
 
     if (result == nil) {
         result = [[[NSFont alloc] initWithName: name size: size] autorelease];
     }
+
+    if (result == nil && ![name isEqualToString: fallbackName])
+        result = [self fontWithName: fallbackName size: size];
 
     return result;
 }

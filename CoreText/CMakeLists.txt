@@ -59,3 +59,10 @@ add_framework(CoreText
 		# native
 		FreeType
 )
+
+# Comet dyld compatibility stubs
+if(TARGET CoreText_obj)
+  target_sources(CoreText_obj PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/comet_stubs.m)
+elseif(TARGET CoreText)
+  target_sources(CoreText PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/comet_stubs.m)
+endif()

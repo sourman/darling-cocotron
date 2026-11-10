@@ -428,46 +428,70 @@ void O2FontRelease(O2FontRef self) {
 }
 
 O2FontPlatformType O2FontGetPlatformType(O2Font *self) {
+    if (self == NULL)
+        return 0;
     return self->_platformType;
 }
 
 CFStringRef O2FontCopyFullName(O2FontRef self) {
+    if (self == NULL)
+        return NULL;
     return (CFStringRef)[self->_name copy];
 }
 
 int O2FontGetUnitsPerEm(O2FontRef self) {
+    if (self == NULL)
+        return 0;
     return self->_unitsPerEm;
 }
 
 int O2FontGetAscent(O2FontRef self) {
+    if (self == NULL)
+        return 0;
     return self->_ascent;
 }
 
 int O2FontGetDescent(O2FontRef self) {
+    if (self == NULL)
+        return 0;
     return self->_descent;
 }
 
 int O2FontGetLeading(O2FontRef self) {
+    if (self == NULL)
+        return 0;
     return self->_leading;
 }
 
 int O2FontGetCapHeight(O2FontRef self) {
+    if (self == NULL)
+        return 0;
     return self->_capHeight;
 }
 
 int O2FontGetXHeight(O2FontRef self) {
+    if (self == NULL)
+        return 0;
     return self->_xHeight;
 }
 
 O2Float O2FontGetItalicAngle(O2FontRef self) {
+    if (self == NULL)
+        return 0;
     return self->_italicAngle;
 }
 
 O2Float O2FontGetStemV(O2FontRef self) {
+    if (self == NULL)
+        return 0;
     return self->_stemV;
 }
 
 O2Rect O2FontGetFontBBox(O2FontRef self) {
+    if (self == NULL) {
+        O2Rect zero = {0};
+        return zero;
+    }
     return self->_bbox;
 }
 

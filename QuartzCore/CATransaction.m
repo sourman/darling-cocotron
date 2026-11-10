@@ -114,4 +114,14 @@ static CATransactionGroup *createImplicitTransactionGroupIfNeeded() {
 + (void) unlock {
 }
 
++ (void) addCommitHandler: (void (^)(void)) block forPhase: (int) phase {
+    (void) phase;
+    /*
+     * Chromium registers the handler and then CHECKs that the selector
+     * exists. Run it now so the commit work is not dropped.
+     */
+    if (block != nil)
+        block();
+}
+
 @end

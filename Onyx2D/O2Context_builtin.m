@@ -267,6 +267,12 @@ ONYX2D_STATIC O2Paint *paintFromColor(O2Context_builtin *self, O2ColorRef color,
                                       O2AffineTransform surfaceToPaintMatrix)
 {
     O2Paint *result = nil;
+
+    if ((uintptr_t)color < 0x1000)
+        return [[O2Paint_color alloc] initWithGray: 0
+                                             alpha: 1
+                           surfaceToPaintTransform: surfaceToPaintMatrix];
+
     O2PatternRef pattern = O2ColorGetPattern(color);
 
     if (pattern != NULL) {

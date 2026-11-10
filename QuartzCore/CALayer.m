@@ -1,8 +1,13 @@
 #import <Foundation/NSDictionary.h>
+#import <Foundation/NSInvocation.h>
+#import <Foundation/NSMethodSignature.h>
+#import <Foundation/NSString.h>
 #import <QuartzCore/CAAnimation.h>
 #import <QuartzCore/CALayer.h>
 #import <QuartzCore/CALayerContext.h>
 #import <QuartzCore/CATransaction.h>
+#import <stdio.h>
+#import <objc/runtime.h>
 
 NSString *const kCAFilterLinear = @"linear";
 NSString *const kCAFilterNearest = @"nearest";
@@ -31,6 +36,40 @@ NSString *const kCAContentsFormatRGBA16Float = @"RGBAh";
 NSString *const kCAContentsFormatGray8Uint = @"Gray8";
 
 @implementation CALayer
+
+- (void) setGeometryFlipped: (BOOL) value {
+}
+
+- (BOOL) isGeometryFlipped {
+    return NO;
+}
+
+- (BOOL) geometryFlipped {
+    return NO;
+}
+
+- (void) setAutoresizingMask: (unsigned int) mask {
+}
+
+- (NSMethodSignature *) methodSignatureForSelector: (SEL) selector {
+    return [NSMethodSignature signatureWithObjCTypes: "v@:"];
+}
+
+- (void) forwardInvocation: (NSInvocation *) invocation {
+}
+
+- (void) doesNotRecognizeSelector: (SEL) selector {
+}
+
++ (NSMethodSignature *) methodSignatureForSelector: (SEL) selector {
+    return [NSMethodSignature signatureWithObjCTypes: "v@:"];
+}
+
++ (void) forwardInvocation: (NSInvocation *) invocation {
+}
+
++ (void) doesNotRecognizeSelector: (SEL) selector {
+}
 
 + layer {
     return [[[self alloc] init] autorelease];
@@ -270,22 +309,90 @@ NSString *const kCAContentsFormatGray8Uint = @"Gray8";
     layer->_superlayer = nil;
 }
 
+static size_t CALayerCountPainted(const uint8_t *bytes, size_t width, size_t height,
+                                 size_t bytesPerRow, uint32_t *firstPixel, size_t *firstIndex) {
+    size_t painted = 0;
+    size_t index = 0;
+    *firstPixel = 0;
+    *firstIndex = 0;
+    for (size_t y = 0; y < height; y++) {
+        const uint8_t *row = bytes + y * bytesPerRow;
+        for (size_t x = 0; x < width; x++, index++) {
+            uint8_t b = row[x * 4];
+            uint8_t g = row[x * 4 + 1];
+            uint8_t r = row[x * 4 + 2];
+            if (r > 12 || g > 12 || b > 12) {
+                if (painted == 0) {
+                    *firstPixel = (uint32_t) b | ((uint32_t) g << 8) |
+                                  ((uint32_t) r << 16) | ((uint32_t) row[x * 4 + 3] << 24);
+                    *firstIndex = index;
+                }
+                painted++;
+            }
+        }
+    }
+    return painted;
+}
+
 - (void) display {
-    if ([_delegate respondsToSelector: @selector(displayLayer:)])
+    size_t width = (size_t)CGRectGetWidth(_bounds);
+    size_t height = (size_t)CGRectGetHeight(_bounds);
+    if (width < 1 || height < 1)
+        return;
+
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGContextRef context = CGBitmapContextCreate(
+            NULL, width, height, 8, 0, colorSpace,
+            kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Host);
+    CGColorSpaceRelease(colorSpace);
+    if (context == NULL)
+        return;
+
+    BOOL drew = [_delegate respondsToSelector: @selector(drawLayer:inContext:)];
+    if (drew)
+        [_delegate drawLayer: self inContext: context];
+
+    uint8_t *pixels = CGBitmapContextGetData(context);
+    size_t bytesPerRow = CGBitmapContextGetBytesPerRow(context);
+    uint32_t firstPixel = 0;
+    size_t firstIndex = 0;
+    size_t painted = 0;
+    if (pixels != NULL)
+        painted = CALayerCountPainted(pixels, width, height, bytesPerRow, &firstPixel, &firstIndex);
+    fprintf(stderr,
+            "CALayer display %zux%zu drawInContext %s delegate %s painted %zu first %08x at %zu\n",
+            width, height, drew ? "ran" : "skipped",
+            _delegate == nil ? "nil" : class_getName([_delegate class]),
+            painted, firstPixel, firstIndex);
+    fflush(stderr);
+
+    static __thread int inDelegateDisplay;
+    if (!drew && !inDelegateDisplay &&
+        [_delegate respondsToSelector: @selector(displayLayer:)]) {
+        CGContextRelease(context);
+        inDelegateDisplay = 1;
         [_delegate displayLayer: self];
-    else {
-#if 0
+        inDelegateDisplay = 0;
+        fprintf(stderr, "CALayer display called displayLayer:\n");
+        fflush(stderr);
+        return;
+    }
 
-#warning create bitmap context
-
-    [self drawInContext:context];
-    _contents=image;
-    [self setContents:image];
-#endif
+    CGImageRef image = CGBitmapContextCreateImage(context);
+    CGContextRelease(context);
+    if (image != NULL) {
+        [self setContents: (id)image];
+        CGImageRelease(image);
     }
 }
 
 - (void) displayIfNeeded {
+    if (_needsDisplay) {
+        [self display];
+        _needsDisplay = NO;
+    }
+    for (CALayer *sublayer in _sublayers)
+        [sublayer displayIfNeeded];
 }
 
 - (void) drawInContext: (CGContextRef) context {
