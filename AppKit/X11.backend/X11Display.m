@@ -258,9 +258,11 @@ static void socketCallback(CFSocketRef s, CFSocketCallBackType type,
             NSRect frame = NSMakeRect(
                     0, 0, DisplayWidth(_display, DefaultScreen(_display)),
                     DisplayHeight(_display, DefaultScreen(_display)));
-            [retval addObject: [[[NSScreen alloc] initWithFrame: frame
-                                                   visibleFrame: frame]
-                                       autorelease]];
+            NSScreen *fallback = [[[NSScreen alloc] initWithFrame: frame
+                                                     visibleFrame: frame]
+                    autorelease];
+            [fallback setCgDirectDisplayID: DefaultScreen(_display) + 1];
+            [retval addObject: fallback];
         }
 
         NSArray* array = [NSArray arrayWithArray: retval];
@@ -276,10 +278,11 @@ static void socketCallback(CFSocketRef s, CFSocketCallBackType type,
         NSRect frame = NSMakeRect(
                 0, 0, DisplayWidth(_display, DefaultScreen(_display)),
                 DisplayHeight(_display, DefaultScreen(_display)));
-        NSArray *array = [NSArray
-                arrayWithObject: [[[NSScreen alloc] initWithFrame: frame
-                                                     visibleFrame: frame]
-                                         autorelease]];
+        NSScreen *fallback = [[[NSScreen alloc] initWithFrame: frame
+                                                 visibleFrame: frame]
+                autorelease];
+        [fallback setCgDirectDisplayID: DefaultScreen(_display) + 1];
+        NSArray *array = [NSArray arrayWithObject: fallback];
         _lastScreens = [array retain];
         return array;
     }
