@@ -1548,8 +1548,15 @@ static BOOL _allowsAutomaticWindowTabbing;
 }
 
 - (BOOL) isOnActiveSpace {
-    NSUnimplementedMethod();
-    return YES;
+    /*
+     * One X11 screen and no Spaces. A window ordered front is on that
+     * screen, so IsVisibleOnScreen can become true when is_visible_ does.
+     */
+    BOOL onSpace = YES;
+    fprintf(stderr, "isOnActiveSpace returned %d visible %d\n",
+            onSpace, _isVisible);
+    fflush(stderr);
+    return onSpace;
 }
 
 - (NSWindowSharingType) sharingType {
@@ -2266,6 +2273,23 @@ static BOOL _allowsAutomaticWindowTabbing;
                 _isVisible, YES);
         fflush(stderr);
         _isVisible = YES;
+        /*
+         * The subclass calls onWindowOrderChanged: after this returns.
+         * is_on_active_space_ has to be set before that, or
+         * IsVisibleOnScreen stays false.
+         */
+        {
+            BOOL onSpace = [self isOnActiveSpace];
+            id delegate = [self delegate];
+            SEL spaceChanged = @selector(onActiveSpaceChanged:);
+            BOOL spaceResponds = [delegate respondsToSelector: spaceChanged];
+            fprintf(stderr,
+                    "isOnActiveSpace returned %d before visibility change responds %d\n",
+                    onSpace, spaceResponds);
+            fflush(stderr);
+            if (spaceResponds)
+                [delegate performSelector: spaceChanged withObject: nil];
+        }
         [[self platformWindow] placeAboveWindow: relativeTo];
         /* In some instances when a COMMAND is issued from a menu item to bring
            a window front, the window is not displayed right (black,
