@@ -466,6 +466,34 @@ static BOOL _allowsAutomaticWindowTabbing;
     [_backgroundView setNeedsDisplay: YES]; // FIXME: verify this is done
 }
 
+- (void) _deliverOcclusionState {
+    id delegate = _delegate;
+    SEL changed = @selector(windowDidChangeOcclusionState:);
+    if (![delegate respondsToSelector: changed])
+        return;
+    NSNotification *note = [NSNotification
+            notificationWithName: NSWindowDidChangeOcclusionStateNotification
+                          object: self];
+    [delegate performSelector: changed withObject: note];
+}
+
+/*
+ * ExternalBeginFrameSourceMac is created when the screen id is applied,
+ * which is after the first occlusion notice. needs_begin_frames_ stays
+ * clear because SetVisible(true) already ran. A later hidden-then-shown
+ * pair is what calls OnNeedsBeginFrames(true) on that object.
+ */
+- (void) _setBeginFramesForShownWindow {
+    if (!_isVisible)
+        return;
+    fprintf(stderr, "NSWindow begin-frames store window %p\n", self);
+    fflush(stderr);
+    _isVisible = NO;
+    [self _deliverOcclusionState];
+    _isVisible = YES;
+    [self _deliverOcclusionState];
+}
+
 - (void) postNotificationName: (NSNotificationName) name {
     [[NSNotificationCenter defaultCenter] postNotificationName: name
                                                         object: self];
@@ -2281,6 +2309,16 @@ static BOOL _allowsAutomaticWindowTabbing;
                 responds, [NSThread isMainThread]);
         fflush(stderr);
         [self postNotificationName: NSWindowDidChangeOcclusionStateNotification];
+        [self _deliverOcclusionState];
+        [self performSelector: @selector(_setBeginFramesForShownWindow)
+                   withObject: nil
+                   afterDelay: 0];
+        [self performSelector: @selector(_setBeginFramesForShownWindow)
+                   withObject: nil
+                   afterDelay: 0.5];
+        [self performSelector: @selector(_setBeginFramesForShownWindow)
+                   withObject: nil
+                   afterDelay: 1.5];
     }
 }
 
