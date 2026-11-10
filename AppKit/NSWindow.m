@@ -466,6 +466,54 @@ static BOOL _allowsAutomaticWindowTabbing;
     [_backgroundView setNeedsDisplay: YES]; // FIXME: verify this is done
 }
 
+- (void) _deliverOcclusionState {
+    id delegate = _delegate;
+    SEL changed = @selector(windowDidChangeOcclusionState:);
+    if (![delegate respondsToSelector: changed])
+        return;
+    NSNotification *note = [NSNotification
+            notificationWithName: NSWindowDidChangeOcclusionStateNotification
+                          object: self];
+    [delegate performSelector: changed withObject: note];
+}
+
+/*
+ * ExternalBeginFrameSourceMac is created when the screen id is applied,
+ * which is after the first occlusion notice. needs_begin_frames_ stays
+ * clear because SetVisible(true) already ran. A later hidden-then-shown
+ * pair is what calls OnNeedsBeginFrames(true) on that object.
+ */
+- (void) _setBeginFramesForShownWindow {
+    if (!_isVisible)
+        return;
+    /*
+     * windowDidChangeOcclusionState: only checks the active space.
+     * OnNeedsBeginFrames is reached from onWindowOrderChanged: ->
+     * OnVisibilityChanged, and only when isVisible actually changes.
+     */
+    id delegate = _delegate;
+    SEL orderChanged = @selector(onWindowOrderChanged:);
+    BOOL responds = [delegate respondsToSelector: orderChanged];
+    fprintf(stderr,
+            "NSWindow onWindowOrderChanged window %p delegate %s responds %d\n",
+            self,
+            delegate ? [NSStringFromClass([delegate class]) UTF8String] : "(nil)",
+            responds);
+    fflush(stderr);
+    if (!responds)
+        return;
+    int before = _isVisible;
+    if (before) {
+        _isVisible = NO;
+        [delegate performSelector: orderChanged withObject: nil];
+    }
+    _isVisible = YES;
+    fprintf(stderr, "NSWindow shown call isVisible before %d after %d\n",
+            before, _isVisible);
+    fflush(stderr);
+    [delegate performSelector: orderChanged withObject: nil];
+}
+
 - (void) postNotificationName: (NSNotificationName) name {
     [[NSNotificationCenter defaultCenter] postNotificationName: name
                                                         object: self];
@@ -1500,8 +1548,17 @@ static BOOL _allowsAutomaticWindowTabbing;
 }
 
 - (BOOL) isOnActiveSpace {
-    NSUnimplementedMethod();
-    return YES;
+    /*
+     * OnSpaceActivationMayHaveChanged stores is_on_active_space_ only
+     * when this value changes. Init reads it while the window is still
+     * hidden; that read has to stay false so the ordered-front read is
+     * the one stored before OnVisibilityChanged compares.
+     */
+    BOOL onSpace = _isVisible ? YES : NO;
+    fprintf(stderr, "isOnActiveSpace returned %d visible %d\n",
+            onSpace, _isVisible);
+    fflush(stderr);
+    return onSpace;
 }
 
 - (NSWindowSharingType) sharingType {
@@ -2209,7 +2266,32 @@ static BOOL _allowsAutomaticWindowTabbing;
     switch (place) {
     case NSWindowAbove:
         [self update];
+        /*
+         * The subclass calls onWindowOrderChanged: after this returns.
+         * isVisible has to change across that call or OnVisibilityChanged
+         * returns before the begin-frame source hears about it.
+         */
+        fprintf(stderr, "NSWindow shown call isVisible before %d after %d\n",
+                _isVisible, YES);
+        fflush(stderr);
         _isVisible = YES;
+        /*
+         * The subclass calls onWindowOrderChanged: after this returns.
+         * is_on_active_space_ has to be set before that, or
+         * IsVisibleOnScreen stays false.
+         */
+        {
+            BOOL onSpace = [self isOnActiveSpace];
+            id delegate = [self delegate];
+            SEL spaceChanged = @selector(onActiveSpaceChanged:);
+            BOOL spaceResponds = [delegate respondsToSelector: spaceChanged];
+            fprintf(stderr,
+                    "is_on_active_space_ store before compare returned %d responds %d\n",
+                    onSpace, spaceResponds);
+            fflush(stderr);
+            if (spaceResponds)
+                [delegate performSelector: spaceChanged withObject: nil];
+        }
         [[self platformWindow] placeAboveWindow: relativeTo];
         /* In some instances when a COMMAND is issued from a menu item to bring
            a window front, the window is not displayed right (black,
@@ -2222,6 +2304,23 @@ static BOOL _allowsAutomaticWindowTabbing;
         if (![self isKindOfClass: [NSPanel class]] &&
             ![self isExcludedFromWindowsMenu]) {
             [NSApp changeWindowsItem: self title: _title filename: NO];
+        }
+        /*
+         * NativeWidgetMacNSWindowHost::display_ stays at
+         * display::kInvalidDisplayId until windowDidChangeScreen: runs.
+         * Posting the notification does not call the delegate, and that
+         * -1 is what GetForDisplay receives.
+         */
+        [self postNotificationName: NSWindowDidChangeScreenNotification];
+        {
+            id delegate = [self delegate];
+            SEL screenChanged = @selector(windowDidChangeScreen:);
+            if ([delegate respondsToSelector: screenChanged]) {
+                NSNotification *note = [NSNotification
+                        notificationWithName: NSWindowDidChangeScreenNotification
+                                      object: self];
+                [delegate performSelector: screenChanged withObject: note];
+            }
         }
         break;
 
@@ -2264,6 +2363,27 @@ static BOOL _allowsAutomaticWindowTabbing;
                 responds, [NSThread isMainThread]);
         fflush(stderr);
         [self postNotificationName: NSWindowDidChangeOcclusionStateNotification];
+        [self _deliverOcclusionState];
+        /*
+         * OnVisibilityChanged updates is_visible_ and then skips
+         * OnNativeWidgetVisibilityOnScreenChanged while
+         * was_visible_on_screen == IsVisibleOnScreen(). Both stay false
+         * when is_on_active_space_ was never set, so the display link
+         * is not created. Tell the host the space is active first.
+         */
+        BOOL onSpace = [self isOnActiveSpace];
+        fprintf(stderr,
+                "NSWindow OnVisibilityChanged branch was_visible_on_screen == IsVisibleOnScreen onActiveSpace %d isVisible %d\n",
+                onSpace, _isVisible);
+        fflush(stderr);
+        {
+            SEL spaceChanged = @selector(onActiveSpaceChanged:);
+            if ([delegate respondsToSelector: spaceChanged])
+                [delegate performSelector: spaceChanged withObject: nil];
+        }
+        [self performSelector: @selector(_setBeginFramesForShownWindow)
+                   withObject: nil
+                   afterDelay: 2];
     }
 }
 

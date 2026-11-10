@@ -53,19 +53,56 @@ static NSDisplay *currentDisplay(void) {
     return [cls currentDisplay];
 }
 
+/*
+ * The GPU process has no NSScreen. The Comet window is a child of the
+ * default X screen, so that screen is the display the window is on.
+ */
+static CGDirectDisplayID x11WindowDisplayID(void) {
+    void *lib = dlopen("/usr/lib/native/libX11.dylib", RTLD_LAZY);
+    if (!lib)
+        return kCGNullDirectDisplay;
+
+    void *(*openDisplay)(const char *) = dlsym(lib, "XOpenDisplay");
+    int (*defaultScreen)(void *) = dlsym(lib, "XDefaultScreen");
+    int (*displayWidth)(void *, int) = dlsym(lib, "XDisplayWidth");
+    int (*displayHeight)(void *, int) = dlsym(lib, "XDisplayHeight");
+    int (*closeDisplay)(void *) = dlsym(lib, "XCloseDisplay");
+    if (!openDisplay || !defaultScreen || !displayWidth || !displayHeight ||
+        !closeDisplay)
+        return kCGNullDirectDisplay;
+
+    void *dpy = openDisplay(NULL);
+    if (!dpy)
+        return kCGNullDirectDisplay;
+
+    int screen = defaultScreen(dpy);
+    int width = displayWidth(dpy, screen);
+    int height = displayHeight(dpy, screen);
+    closeDisplay(dpy);
+    if (width <= 0 || height <= 0)
+        return kCGNullDirectDisplay;
+    return (CGDirectDisplayID) (screen + 1);
+}
+
 CGDirectDisplayID CGMainDisplayID(void) {
     NSDisplay *display = currentDisplay();
-    if (!display)
-        return kCGErrorInvalidConnection;
+    if (display) {
+        NSArray<NSScreen *> *screens = [display screens];
 
-    NSArray<NSScreen *> *screens = [display screens];
-
-    for (int i = 0; i < [screens count]; i++) {
-        if (!NSIsEmptyRect([[screens objectAtIndex: i] frame])) {
-            return i + 1;
+        for (int i = 0; i < [screens count]; i++) {
+            NSScreen *screen = [screens objectAtIndex: i];
+            if (NSIsEmptyRect([screen frame]))
+                continue;
+            CGDirectDisplayID displayID = [screen cgDirectDisplayID];
+            if (displayID == kCGNullDirectDisplay)
+                displayID = (CGDirectDisplayID) (i + 1);
+            return displayID;
         }
     }
 
+    CGDirectDisplayID x11ID = x11WindowDisplayID();
+    if (x11ID != kCGNullDirectDisplay)
+        return x11ID;
     return kCGNullDirectDisplay;
 }
 
