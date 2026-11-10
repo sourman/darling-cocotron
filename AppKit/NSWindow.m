@@ -2338,6 +2338,23 @@ static BOOL _allowsAutomaticWindowTabbing;
         fflush(stderr);
         [self postNotificationName: NSWindowDidChangeOcclusionStateNotification];
         [self _deliverOcclusionState];
+        /*
+         * OnVisibilityChanged updates is_visible_ and then skips
+         * OnNativeWidgetVisibilityOnScreenChanged while
+         * was_visible_on_screen == IsVisibleOnScreen(). Both stay false
+         * when is_on_active_space_ was never set, so the display link
+         * is not created. Tell the host the space is active first.
+         */
+        BOOL onSpace = [self isOnActiveSpace];
+        fprintf(stderr,
+                "NSWindow OnVisibilityChanged branch was_visible_on_screen == IsVisibleOnScreen onActiveSpace %d isVisible %d\n",
+                onSpace, _isVisible);
+        fflush(stderr);
+        {
+            SEL spaceChanged = @selector(onActiveSpaceChanged:);
+            if ([delegate respondsToSelector: spaceChanged])
+                [delegate performSelector: spaceChanged withObject: nil];
+        }
         [self performSelector: @selector(_setBeginFramesForShownWindow)
                    withObject: nil
                    afterDelay: 2];
