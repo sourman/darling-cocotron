@@ -21,6 +21,25 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 #import <AppKit/NSErrors.h>
 #import <AppKit/NSRaise.h>
 #import <AppKit/NSColorList.h>
+#import <Foundation/NSBundle.h>
+#import <Foundation/NSFileManager.h>
+#import <objc/runtime.h>
+#include <stdio.h>
+
+static void addAppKitBackends(NSMutableArray *backends, NSString *dir)
+{
+    NSArray *names = [[NSFileManager defaultManager]
+            contentsOfDirectoryAtPath: dir
+                                 error: NULL];
+    for (NSString *name in names) {
+        if (![[name pathExtension] isEqualToString: @"backend"])
+            continue;
+        NSString *path = [dir stringByAppendingPathComponent: name];
+        NSBundle *backendBundle = [NSBundle bundleWithPath: path];
+        if ([backendBundle load])
+            [backends addObject: backendBundle];
+    }
+}
 
 @implementation NSDisplay
 
@@ -54,8 +73,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
     // the installed backends and initialize on of them.
     [self release];
 
-    // Discover the installed backends.
+    // Discover the installed backends. The class bundle is the AppKit
+    // the browser already used. A helper whose image path does not walk
+    // back to that framework gets an empty list and used to abort.
     NSBundle *appKitBundle = [NSBundle bundleForClass: [NSDisplay class]];
+    const char *imageName = class_getImageName([NSDisplay class]);
+    fprintf(stderr, "NSDisplay backends bundle=%s image=%s\n",
+            [[appKitBundle bundlePath] UTF8String],
+            imageName ? imageName : "(null)");
     NSMutableArray *backends = [NSMutableArray new];
     for (NSString *path in
          [appKitBundle pathsForResourcesOfType: @"backend"
@@ -64,6 +89,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
         if ([backendBundle load]) {
             [backends addObject: backendBundle];
         }
+    }
+    if ([backends count] == 0) {
+        addAppKitBackends(backends,
+                @"/System/Library/Frameworks/AppKit.framework/Resources/Backends");
+        addAppKitBackends(backends,
+                @"/System/Library/Frameworks/AppKit.framework/Versions/C/Resources/Backends");
+        fprintf(stderr, "NSDisplay backends fallback count=%lu\n",
+                (unsigned long)[backends count]);
     }
 
     // Sort them according to the NSPriority key in their Info.plist files.
