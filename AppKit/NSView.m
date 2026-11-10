@@ -2227,9 +2227,14 @@ static NSView *viewBeingPrinted = nil;
     CGContextRef context = [graphicsContext graphicsPort];
 
     if (viewBeingPrinted == nil && _layer != nil) {
-        CGImageRef image = CGBitmapContextCreateImage(context);
-        [_layer setContents:(id)image];
-        CGImageRelease(image);
+        id existing = [_layer contents];
+        BOOL keepSurface = existing != nil &&
+                strcmp(class_getName([existing class]), "IOSurface") == 0;
+        if (!keepSurface) {
+            CGImageRef image = CGBitmapContextCreateImage(context);
+            [_layer setContents:(id)image];
+            CGImageRelease(image);
+        }
     }
 
     CGContextRestoreGState(context);
