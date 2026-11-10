@@ -77,7 +77,15 @@ NSNotificationName const NSScreenColorSpaceDidChangeNotification = @"NSScreenCol
 }
 
 - (NSDictionary<NSDeviceDescriptionKey, id> *) deviceDescription {
-    return @{};
+    /*
+     * DisplayLinkMac::GetForDisplay returns before
+     * CVDisplayLinkCreateWithCGDisplay when this id is 0. The X11 window
+     * is on the default screen, which is display 1.
+     */
+    CGDirectDisplayID displayID = self->_directDisplayID;
+    if (displayID == 0)
+        displayID = 1;
+    return @{ @"NSScreenNumber" : [NSNumber numberWithUnsignedInt: displayID] };
 }
 
 @end
