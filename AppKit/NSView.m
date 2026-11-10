@@ -1032,6 +1032,14 @@ static inline void buildTransformsIfNeeded(NSView *self) {
     return NSMakeRect(minx, miny, maxx - minx, maxy - miny);
 }
 
+- (void) setClipsToBounds: (BOOL) flag {
+    (void) flag;
+}
+
+- (BOOL) clipsToBounds {
+    return NO;
+}
+
 - (void) setFrame: (NSRect) frame {
     // Cocoa does not post the notification if the frames are equal
     // Possible that resizeSubviewsWithOldSize is not called if the sizes are
