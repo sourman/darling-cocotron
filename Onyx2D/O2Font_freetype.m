@@ -120,6 +120,19 @@ FcConfig *O2FontSharedFontConfig() {
         filename = [[self class] filenameForPattern: @""];
     }
     if (filename == nil) {
+        NSArray *candidates = @[
+            @"/Applications/Comet.app/Contents/Resources/Fonts/FKGroteskNeue-Regular.ttf",
+            @"/Applications/Comet.app/Contents/Resources/Fonts/FKGrotesk-Regular.ttf",
+            @"/Applications/Comet.app/Contents/Resources/Fonts/FKGroteskNeue-Medium.ttf",
+        ];
+        for (NSString *candidate in candidates) {
+            if ([[NSFileManager defaultManager] fileExistsAtPath: candidate]) {
+                filename = candidate;
+                break;
+            }
+        }
+    }
+    if (filename == nil) {
         NSLog(@"No font found for name %@", name);
         [self release];
         return nil;
