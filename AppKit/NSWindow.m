@@ -2226,9 +2226,20 @@ static BOOL _allowsAutomaticWindowTabbing;
         /*
          * NativeWidgetMacNSWindowHost::display_ stays at
          * display::kInvalidDisplayId until windowDidChangeScreen: runs.
-         * That -1 is what GetForDisplay receives.
+         * Posting the notification does not call the delegate, and that
+         * -1 is what GetForDisplay receives.
          */
         [self postNotificationName: NSWindowDidChangeScreenNotification];
+        {
+            id delegate = [self delegate];
+            SEL screenChanged = @selector(windowDidChangeScreen:);
+            if ([delegate respondsToSelector: screenChanged]) {
+                NSNotification *note = [NSNotification
+                        notificationWithName: NSWindowDidChangeScreenNotification
+                                      object: self];
+                [delegate performSelector: screenChanged withObject: note];
+            }
+        }
         break;
 
     case NSWindowBelow:
