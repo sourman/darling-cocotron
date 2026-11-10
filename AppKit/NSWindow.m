@@ -502,14 +502,16 @@ static BOOL _allowsAutomaticWindowTabbing;
     fflush(stderr);
     if (!responds)
         return;
-    _isVisible = NO;
-    [delegate performSelector: orderChanged withObject: nil];
-    fprintf(stderr, "NSWindow OnVisibilityChanged visible 0\n");
-    fflush(stderr);
+    int before = _isVisible;
+    if (before) {
+        _isVisible = NO;
+        [delegate performSelector: orderChanged withObject: nil];
+    }
     _isVisible = YES;
-    [delegate performSelector: orderChanged withObject: nil];
-    fprintf(stderr, "NSWindow OnVisibilityChanged visible 1\n");
+    fprintf(stderr, "NSWindow shown call isVisible before %d after %d\n",
+            before, _isVisible);
     fflush(stderr);
+    [delegate performSelector: orderChanged withObject: nil];
 }
 
 - (void) postNotificationName: (NSNotificationName) name {
@@ -2255,6 +2257,14 @@ static BOOL _allowsAutomaticWindowTabbing;
     switch (place) {
     case NSWindowAbove:
         [self update];
+        /*
+         * The subclass calls onWindowOrderChanged: after this returns.
+         * isVisible has to change across that call or OnVisibilityChanged
+         * returns before the begin-frame source hears about it.
+         */
+        fprintf(stderr, "NSWindow shown call isVisible before %d after %d\n",
+                _isVisible, YES);
+        fflush(stderr);
         _isVisible = YES;
         [[self platformWindow] placeAboveWindow: relativeTo];
         /* In some instances when a COMMAND is issued from a menu item to bring
