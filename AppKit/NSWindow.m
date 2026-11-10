@@ -1549,10 +1549,12 @@ static BOOL _allowsAutomaticWindowTabbing;
 
 - (BOOL) isOnActiveSpace {
     /*
-     * One X11 screen and no Spaces. A window ordered front is on that
-     * screen, so IsVisibleOnScreen can become true when is_visible_ does.
+     * OnSpaceActivationMayHaveChanged stores is_on_active_space_ only
+     * when this value changes. Init reads it while the window is still
+     * hidden; that read has to stay false so the ordered-front read is
+     * the one stored before OnVisibilityChanged compares.
      */
-    BOOL onSpace = YES;
+    BOOL onSpace = _isVisible ? YES : NO;
     fprintf(stderr, "isOnActiveSpace returned %d visible %d\n",
             onSpace, _isVisible);
     fflush(stderr);
@@ -2284,7 +2286,7 @@ static BOOL _allowsAutomaticWindowTabbing;
             SEL spaceChanged = @selector(onActiveSpaceChanged:);
             BOOL spaceResponds = [delegate respondsToSelector: spaceChanged];
             fprintf(stderr,
-                    "isOnActiveSpace returned %d before visibility change responds %d\n",
+                    "is_on_active_space_ store before compare returned %d responds %d\n",
                     onSpace, spaceResponds);
             fflush(stderr);
             if (spaceResponds)
