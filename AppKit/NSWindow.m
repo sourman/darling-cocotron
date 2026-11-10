@@ -2223,6 +2223,12 @@ static BOOL _allowsAutomaticWindowTabbing;
             ![self isExcludedFromWindowsMenu]) {
             [NSApp changeWindowsItem: self title: _title filename: NO];
         }
+        /*
+         * NativeWidgetMacNSWindowHost::display_ stays at
+         * display::kInvalidDisplayId until windowDidChangeScreen: runs.
+         * That -1 is what GetForDisplay receives.
+         */
+        [self postNotificationName: NSWindowDidChangeScreenNotification];
         break;
 
     case NSWindowBelow:
