@@ -23,6 +23,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. */
 #import <AppKit/NSDisplay.h>
 #import <AppKit/NSScreen.h>
 #import <AppKit/NSWindow.h>
+#include <stdio.h>
+#include <unistd.h>
 
 NSNotificationName const NSScreenColorSpaceDidChangeNotification = @"NSScreenColorSpaceDidChangeNotification";
 
@@ -85,6 +87,8 @@ NSNotificationName const NSScreenColorSpaceDidChangeNotification = @"NSScreenCol
     CGDirectDisplayID displayID = self->_directDisplayID;
     if (displayID == 0)
         displayID = 1;
+    fprintf(stderr, "NSScreenNumber read %u pid=%d\n", displayID, getpid());
+    fflush(stderr);
     return @{ @"NSScreenNumber" : [NSNumber numberWithUnsignedInt: displayID] };
 }
 
